@@ -248,7 +248,7 @@ const split = (names, s0, s1) => names.map((n, i) => [n, s0 + (s1 - s0) * i / na
 // Seats per sector in the ticketing system (free + reserved + sold); 33 217 in total. The model sizes every
 // sector to hold its count, except B11 / B12 (below). Row counts follow the real stands (G, C: 32; lower tiers
 // 18; upper A/H 21, E 25, corners 24), so with those rows G, C, ADM, A11 hold fewer seats than ticketed: the
-// model builds 33 093 seats (see window.__stadium.capacity); stand E and H11 are laid out from their row lengths (PER_ROW, BUILT).
+// model builds 32 186 seats (see window.__stadium.capacity); stand E and H11 are laid out from their row lengths (PER_ROW, BUILT).
 const SHOW_NAME = { 'VIP LEWA': 'VIP SILVER', 'VIP PRAWA': 'VIP SILVER' };   // names shown in the UI
 const seatTarget = name => { const d = DATA[name] || {}; return (+d.free || 0) + (+d.reserved || 0) + (+d.sold || 0); };
 // Seats built per sector: the ticketing count, except in corner B's lower tier, which is filled evenly like
@@ -1605,8 +1605,12 @@ function buildSector(st, key, name, s0, s1, extra) {
     const [r0, r1] = bounds(r);
     let out = st.fan ? [[r0 + AISLE / 2, r1 - AISLE / 2]] : [[r0, r1]];
     if (extra && r < extra.rows) out.push([extra.s0, extra.s1]);
-    const v = (st.vom || []).find(v => v.key === key && r >= v.rows[0] && r <= v.rows[1] && (!v.only || v.only.includes(name)));
-    let rz = !v ? zones : st.fan ? [[(r0 + r1) / 2 - 1.6, (r0 + r1) / 2 + 1.6]] : zones.concat(st.aisleS[key].map(a => [a - VOM_HALF, a + VOM_HALF]));
+    // beside every exit two seats are left out each side, through its rows and the row above it, so people can
+    // step off the landing and go on up the sector
+    const WALK = 0.85;
+    const v = (st.vom || []).find(v => v.key === key && r >= v.rows[0] && r <= v.rows[1] + 1 && (!v.only || v.only.includes(name)));
+    const exitAt = c => { const h = st.fan ? 1.6 : VOM_HALF; return r <= v.rows[1] ? [[c - h - WALK, c + h + WALK]] : [[c - h - WALK, c - h + 0.3], [c + h - 0.3, c + h + WALK]]; };
+    let rz = !v ? zones : st.fan ? exitAt((r0 + r1) / 2) : zones.concat(st.aisleS[key].flatMap(exitAt));
     if (press) rz = rz.concat(press(r));
     if (st.tunnel && key === st.tunnel.key && r < st.tunnel.rows) rz = rz.concat([[st.tunnel.s0 - 0.3, st.tunnel.s1 + 0.3]]);
     if (st.entry && key === st.entry.key && r <= st.entry.rows) { const c = entryAt(st, r), h = st.entry.half + 0.1; rz = rz.concat([[c - h, c + h]]); }
