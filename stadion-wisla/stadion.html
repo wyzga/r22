@@ -64,7 +64,7 @@
   .t-fields > div { padding: 9px 11px 7px; display: grid; gap: 3px; }
   .t-fields > div + div { border-left: 1px solid var(--line); }
   .t-fields > div:first-child { background: var(--red); color: #fff; }
-  .t-fields span { font: 600 10.5px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .t-fields span { font: 600 11px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
   .t-fields > div:first-child span { color: rgba(255,255,255,.85); }
   .t-fields b { font: 600 32px/1 var(--sans); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .t-nav { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
@@ -104,7 +104,7 @@
 
   .tip {
     position: fixed; left: 0; top: 0; pointer-events: none; z-index: 5; transform: translate(14px, 14px);
-    background: var(--paper); border: 1px solid var(--line); border-top: 2px solid var(--red); border-radius: var(--radius); padding: 7px 10px; font-size: 13.5px; white-space: nowrap; color: var(--ink);
+    background: var(--paper); border: 1px solid var(--line); border-top: 2px solid var(--red); border-radius: 0; padding: 7px 10px; font-size: 13.5px; white-space: nowrap; color: var(--ink);
     box-shadow: 0 8px 20px rgba(16, 24, 32, 0.18);
   }
   .tip b { font: 600 17px/1 var(--sans); letter-spacing: -0.02em; margin-right: 6px; color: var(--red); }
@@ -1418,9 +1418,11 @@ const AISLE = 1.8; // width of the empty stair gap left between neighbouring sec
             glassPanel(W(st, p(oA), oA, yA - 0.1), W(st, p(oB), oB, yB - 0.1), 0.6);
           }
           const sb = sAt(f, oB);
-          boxL(st, sb - 1.57, sb + 1.57, oB - 0.25, oB, yA - 0.3, yB + 1.0, coreMat);
-          plane(st, sb, 2.0, oB - 0.27, yA + 1.05, 2.1, new THREE.MeshStandardMaterial({ color: 0x1a2230, roughness: 0.3, metalness: 0.4 }));
-          plane(st, sb, 0.6, oB - 0.28, yA + 2.35, 0.22, new THREE.MeshStandardMaterial({ color: 0x1f8a4c, emissive: 0x1f8a4c, emissiveIntensity: 0.6 }));
+          boxL(st, sb - 1.57, sb + 1.57, oB - 0.25, oB, yA - 0.3, yB + t.r, coreMat);   // back wall up to the tread behind, glass above
+          glassPanel(W(st, sb - 1.57, oB - 0.12, yB + t.r), W(st, sb + 1.57, oB - 0.12, yB + t.r), 0.6);
+          const dH = Math.min(2.1, yB + t.r - yA - 0.45);   // door height under the lowered wall, room for the exit sign
+          plane(st, sb, 2.0, oB - 0.27, yA + dH / 2, dH, new THREE.MeshStandardMaterial({ color: 0x1a2230, roughness: 0.3, metalness: 0.4 }));
+          plane(st, sb, 0.6, oB - 0.28, yA + dH + 0.2, 0.22, new THREE.MeshStandardMaterial({ color: 0x1f8a4c, emissive: 0x1f8a4c, emissiveIntensity: 0.6 }));
         }
       }
       continue;
@@ -1437,9 +1439,11 @@ const AISLE = 1.8; // width of the empty stair gap left between neighbouring sec
             const sx = a + dir * 1.95;
             glassPanel(W(st, sx, oA, yA - 0.3), W(st, sx, oB, yB - 0.3), 0.8);
           }
-          boxL(st, a - 2.07, a + 2.07, oB - 0.25, oB, yA - 0.3, yB + 1.0, coreMat);
-          plane(st, a, 2.0, oB - 0.27, yA + 1.05, 2.1, new THREE.MeshStandardMaterial({ color: 0x1a2230, roughness: 0.3, metalness: 0.4 }));
-          plane(st, a, 0.6, oB - 0.28, yA + 2.35, 0.22, new THREE.MeshStandardMaterial({ color: 0x1f8a4c, emissive: 0x1f8a4c, emissiveIntensity: 0.6 }));
+          boxL(st, a - 2.07, a + 2.07, oB - 0.25, oB, yA - 0.3, yB + t.r, coreMat);   // back wall up to the tread behind, glass above
+          glassPanel(W(st, a - 2.07, oB - 0.12, yB + t.r), W(st, a + 2.07, oB - 0.12, yB + t.r), 0.6);
+          const dH = Math.min(2.1, yB + t.r - yA - 0.45);
+          plane(st, a, 2.0, oB - 0.27, yA + dH / 2, dH, new THREE.MeshStandardMaterial({ color: 0x1a2230, roughness: 0.3, metalness: 0.4 }));
+          plane(st, a, 0.6, oB - 0.28, yA + dH + 0.2, 0.22, new THREE.MeshStandardMaterial({ color: 0x1f8a4c, emissive: 0x1f8a4c, emissiveIntensity: 0.6 }));
         }
       }
     }
