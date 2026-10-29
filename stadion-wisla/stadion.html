@@ -242,8 +242,8 @@ const split = (names, s0, s1) => names.map((n, i) => [n, s0 + (s1 - s0) * i / na
 
 // Seats per sector in the ticketing system (free + reserved + sold); 33 217 in total. The model sizes every
 // sector to hold its count, except B11 / B12 (below). Row counts follow the real stands (G, C: 32; lower tiers
-// 18; upper A/H 21, E 25, corners 24), so with those rows G, C, A11, H11 hold fewer seats than ticketed: the
-// model builds 29 949 seats (see window.__stadium.capacity), not the 33 335 of the real stadium.
+// 18; upper A/H 21, E 25, corners 24), so with those rows G, C, ADM, A11 hold fewer seats than ticketed: the
+// model builds 31 403 seats (see window.__stadium.capacity), not the 33 335 of the real stadium.
 const SHOW_NAME = { 'VIP LEWA': 'VIP SILVER', 'VIP PRAWA': 'VIP SILVER' };   // names shown in the UI
 const seatTarget = name => { const d = DATA[name] || {}; return (+d.free || 0) + (+d.reserved || 0) + (+d.sold || 0); };
 // Seats built per sector: the ticketing count, except in corner B's lower tier, which is filled evenly like
@@ -305,14 +305,14 @@ const STANDS = [
     vom: [{ key: 'lower', rows: [5, 10] }, { key: 'upper', rows: [3, 8] }],
   },
   {
-    id: 'G', label: 'Trybuna G za bramką', vomHalf: 0.9, kind: 'end', roof: 'columns', P0: [-61.5, 0, -33.5], t: [0, 0, 1], n: [1, 0, 0], len: 67, back: 38, roofY: 20.5,
+    id: 'G', label: 'Trybuna G za bramką', vomHalf: 1.6, kind: 'end', roof: 'columns', P0: [-61.5, 0, -33.5], t: [0, 0, 1], n: [1, 0, 0], len: 67, back: 38, roofY: 20.5,
     tiers: { single: { o0: 0, y0: 1.1, rows: 32, d: 1.0, r: 0.54, label: 'jeden poziom' } },   // 32 rows, 1.0 m deep, 0.54 m high (28°, like the corner stands): 32 m deep and 18 m high, so the top meets the corners' upper tiers (17.9 m)
     sectors: { single: alloc(range('G', 1, 5), 0, 67) },
     aisleU: { single: [0.14, 0.3, 0.5, 0.7, 0.86] },
     vom: [{ key: 'single', rows: [13, 20] }],
   },
   {
-    id: 'C', label: 'Trybuna C za bramką', vomHalf: 0.9, kind: 'end', roof: 'columns', P0: [61.5, 0, 33.5], t: [0, 0, -1], n: [-1, 0, 0], len: 67, back: 38, roofY: 20.5,
+    id: 'C', label: 'Trybuna C za bramką', vomHalf: 1.6, kind: 'end', roof: 'columns', P0: [61.5, 0, 33.5], t: [0, 0, -1], n: [-1, 0, 0], len: 67, back: 38, roofY: 20.5,
     tiers: { single: { o0: 0, y0: 1.1, rows: 32, d: 1.0, r: 0.54, label: 'jeden poziom' } },   // 32 rows, 1.0 m deep, 0.54 m high (28°, like the corner stands): 32 m deep and 18 m high, so the top meets the corners' upper tiers (17.9 m)
     sectors: { single: alloc(range('C', 1, 5), 0, 67) },
     aisleU: { single: [0.14, 0.3, 0.5, 0.7, 0.86] },
@@ -1461,16 +1461,16 @@ const AISLE = 1.8; // width of the empty stair gap left between neighbouring sec
       // exit tunnels: glass balustrades either side, rising with the rows, and a back wall with dark doors
       for (const vb of (st.vom || []).filter(v => v.key === key)) {
         const t = st.tiers[key], [v0, v1] = vb.rows, oA = t.o0 + v0 * t.d, oB = t.o0 + (v1 + 1) * t.d;
-        const yA = t.y0 + v0 * t.r, yB = t.y0 + v1 * t.r;
+        const yA = t.y0 + v0 * t.r, yB = t.y0 + v1 * t.r, vh = st.vomHalf || 2.1;   // same half-width as the seats leave free
         for (const a of st.aisleS[key]) {
           for (const dir of [-1, 1]) {
-            const sx = a + dir * 1.95;
+            const sx = a + dir * (vh - 0.15);
             glassPanel(W(st, sx, oA, yA - 0.3), W(st, sx, oB, yB - 0.3), 0.8);
           }
-          boxL(st, a - 2.07, a + 2.07, oB - 0.25, oB, yA - 0.3, yB + t.r, coreMat);   // back wall up to the tread behind, glass above
-          glassPanel(W(st, a - 2.07, oB - 0.12, yB + t.r), W(st, a + 2.07, oB - 0.12, yB + t.r), 0.6);
+          boxL(st, a - vh + 0.03, a + vh - 0.03, oB - 0.25, oB, yA - 0.3, yB + t.r, coreMat);   // back wall up to the tread behind, glass above
+          glassPanel(W(st, a - vh + 0.03, oB - 0.12, yB + t.r), W(st, a + vh - 0.03, oB - 0.12, yB + t.r), 0.6);
           const dH = Math.min(2.1, yB + t.r - yA - 0.45);
-          plane(st, a, 2.0, oB - 0.27, yA + dH / 2, dH, new THREE.MeshStandardMaterial({ color: 0x1a2230, roughness: 0.3, metalness: 0.4 }));
+          plane(st, a, Math.min(2.0, 2 * vh - 0.6), oB - 0.27, yA + dH / 2, dH, new THREE.MeshStandardMaterial({ color: 0x1a2230, roughness: 0.3, metalness: 0.4 }));
           plane(st, a, 0.6, oB - 0.28, yA + dH + 0.2, 0.22, new THREE.MeshStandardMaterial({ color: 0x1f8a4c, emissive: 0x1f8a4c, emissiveIntensity: 0.6 }));
         }
       }
@@ -1510,7 +1510,7 @@ function buildSector(st, key, name, s0, s1, extra) {
   // runs of seats in a row: the sector's span minus the stair aisles (and the stand ends) that cross it
   const zones = st.fan ? [] : [...st.aisleS[key], 0, st.len].map(a => [a - AISLE / 2, a + AISLE / 2]);
   const segsCache = [];
-  const VOM_HALF = st.vomHalf || 2.1;   // the exit tunnel and its walls take this much either side of the stair (G, C: 0.9, as photographed)
+  const VOM_HALF = st.vomHalf || 2.1;   // the exit tunnel and its walls take this much either side of the stair (narrower on G and C)
   const segs = r => {
     if (segsCache[r]) return segsCache[r];
     const [r0, r1] = bounds(r);
