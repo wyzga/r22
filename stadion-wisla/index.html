@@ -142,7 +142,7 @@
   <header class="brand panel">
     <div class="crest" aria-hidden="true">
       <!-- the club crest saved next to this page as herb.svg is shown here; without it, the neutral star emblem below -->
-      <img id="crestImg" src="herb.svg" alt="" onerror="this.remove()">
+      <img id="crestImg" src="herb.svg" alt="" onload="document.getElementById('favicon').href=this.src" onerror="this.remove()">
       <svg viewBox="0 0 54 70"><path d="M27 1l2.4 5 5.5.7-4 3.8.9 5.4L27 13.3l-4.8 2.6.9-5.4-4-3.8 5.5-.7z" fill="#d1b06b"/><path d="M5 24c8-6 14-6 22-2 8-4 14-4 22 2l-2 21c-3 10-10 15-20 21C17 60 10 55 7 45z" fill="#c8102e" stroke="#d1b06b" stroke-width="2.2"/><path d="M27 28l4 8.2 9 1.1-6.6 6.2 1.7 8.9-8.1-4.4-8.1 4.4 1.7-8.9-6.6-6.2 9-1.1z" fill="#fff" stroke="#d1b06b" stroke-width="1.1"/></svg>
     </div>
     <p class="kicker">Stadion Miejski im. Henryka Reymana · Wisła Kraków</p>
@@ -238,7 +238,9 @@ const range = (p, a, b) => Array.from({ length: b - a + 1 }, (_, i) => p + (a + 
 const split = (names, s0, s1) => names.map((n, i) => [n, s0 + (s1 - s0) * i / names.length, s0 + (s1 - s0) * (i + 1) / names.length]);
 
 // Seats per sector in the ticketing system (free + reserved + sold); 33 217 in total. The model sizes every
-// sector to hold its count, except B11 / B12 (below).
+// sector to hold its count, except B11 / B12 (below). Row counts follow the real stands (G, C: 32; lower tiers
+// 18; upper A/H 21, E 25, corners 24), so with those rows G, C, A11, H11 hold fewer seats than ticketed: the
+// model builds 29 949 seats (see window.__stadium.capacity), not the 33 335 of the real stadium.
 const SHOW_NAME = { 'VIP LEWA': 'VIP SILVER', 'VIP PRAWA': 'VIP SILVER' };   // names shown in the UI
 const seatTarget = name => { const d = DATA[name] || {}; return (+d.free || 0) + (+d.reserved || 0) + (+d.sold || 0); };
 // Seats built per sector: the ticketing count, except in corner B's lower tier, which is filled evenly like
@@ -268,12 +270,12 @@ const alloc = (names, s0, s1) => {
 };
 
 const TIERS_A = {
-  lower: { o0: 0, y0: 1.1, rows: 22, d: 0.80, r: 0.27, label: 'dolny poziom' },
+  lower: { o0: 0, y0: 1.1, rows: 18, d: 0.80, r: 0.27, label: 'dolny poziom' },
   upper: { o0: 15.5, y0: 10.8, rows: 21, d: 0.85, r: 0.405, label: 'górny poziom' },
 };
 const TIERS_E = {
   lower: { o0: 0, y0: 1.1, rows: 18, d: 0.80, r: 0.285, label: 'dolny poziom' },
-  upper: { o0: 12.6, y0: 9.3, rows: 26, d: 0.82, r: 0.375, label: 'górny poziom' },
+  upper: { o0: 12.6, y0: 9.3, rows: 25, d: 0.82, r: 0.375, label: 'górny poziom' },
 };
 const STANDS = [
   {
@@ -301,22 +303,23 @@ const STANDS = [
   },
   {
     id: 'G', label: 'Trybuna G za bramką', kind: 'end', roof: 'columns', P0: [-61.5, 0, -33.5], t: [0, 0, 1], n: [1, 0, 0], len: 67, back: 38, roofY: 20.5,
-    tiers: { single: { o0: 0, y0: 1.1, rows: 46, d: 0.80, r: 0.375, label: 'jeden poziom' } },
+    tiers: { single: { o0: 0, y0: 1.1, rows: 32, d: 0.80, r: 0.375, label: 'jeden poziom' } },
     sectors: { single: alloc(range('G', 1, 5), 0, 67) },
     aisleU: { single: [0.14, 0.3, 0.5, 0.7, 0.86] },
     vom: [{ key: 'single', rows: [13, 20] }],
   },
   {
     id: 'C', label: 'Trybuna C za bramką', kind: 'end', roof: 'columns', P0: [61.5, 0, 33.5], t: [0, 0, -1], n: [-1, 0, 0], len: 67, back: 38, roofY: 20.5,
-    tiers: { single: { o0: 0, y0: 1.1, rows: 46, d: 0.80, r: 0.375, label: 'jeden poziom' } },
+    tiers: { single: { o0: 0, y0: 1.1, rows: 32, d: 0.80, r: 0.375, label: 'jeden poziom' } },
     sectors: { single: alloc(range('C', 1, 5), 0, 67) },
     aisleU: { single: [0.14, 0.3, 0.5, 0.7, 0.86] },
     vom: [{ key: 'single', rows: [13, 20] }],
   },
   // corner stands B, D, F set at 45° between the side and goal-end stands; the fourth corner (H) holds the round media pavilion
-  cornerStand('B', 1, -1, ['B11', 'B12'], range('B2', 1, 4), TIERS_A, 35),   // F's layout, A's tiers so the fronts meet
-  cornerStand('D', 1, 1, ['D11', 'D12'], range('D2', 1, 4), TIERS_E, 35),
-  cornerStand('F', -1, 1, ['F11', 'F12'], range('F2', 1, 4), TIERS_E, 35),
+  // corner upper tiers have 24 rows (B, D, F); the lower tiers follow the side stand they adjoin (18 rows)
+  cornerStand('B', 1, -1, ['B11', 'B12'], range('B2', 1, 4), { lower: TIERS_A.lower, upper: { ...TIERS_A.upper, rows: 24 } }, 35),   // F's layout, A's tiers so the fronts meet
+  cornerStand('D', 1, 1, ['D11', 'D12'], range('D2', 1, 4), { lower: TIERS_E.lower, upper: { ...TIERS_E.upper, rows: 24 } }, 35),
+  cornerStand('F', -1, 1, ['F11', 'F12'], range('F2', 1, 4), { lower: TIERS_E.lower, upper: { ...TIERS_E.upper, rows: 24 } }, 35),
 ];
 // A corner stand continues the tiers of the side stand it adjoins. Its front runs at 45° from the
 // end of the side stand (x = ±53.5, z = ±41.5) to the corner of the goal-end stand (x = ±61.5, z = ±33.5).
