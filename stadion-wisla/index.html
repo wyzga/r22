@@ -353,9 +353,9 @@ function cornerStand(id, sx, sz, lower, upper, side, sideBack) {
     tiers: { lower: { ...fanTier(side.lower), rEnd: 0.35 }, upper: fanTier(side.upper) },
     sectors: { lower: lowerS, upper: alloc(upper, 0, 1) },
     vom: [{ key: 'upper', rows: [2, 7], only: upper.slice(1, 3) }],   // two tunnels, in the two middle sectors
-    // entrance to the lower sectors: a stair from the pitch-side walkway climbing diagonally across the
-    // front rows of the larger sector up to the aisle between the two (as photographed)
-    entry: { key: 'lower', rows: 7, f: lowerS[1][1], side: layoutSeats(lower[1]) >= layoutSeats(lower[0]) ? 1 : -1 },
+    // entrance to the lower sectors, as photographed: a 2 m stair climbing diagonally through every row, from the
+    // pitch-side walkway up to the aisle between the two sectors at the back of the tier
+    entry: { key: 'lower', rows: side.lower.rows - 1, half: 1.0, slope: 0.35, f: lowerS[1][1], side: layoutSeats(lower[1]) >= layoutSeats(lower[0]) ? 1 : -1 },
   };
 }
 // height of row r of a corner tier at position s, depth o. Towards the goal-end edge the middle rows are raised
@@ -367,10 +367,10 @@ function tierY(st, t, r, s, o) {
   const f = THREE.MathUtils.clamp((s + o) / (st.len + 2 * o), 0, 1), g = st.endS0 ? 1 - f : f;
   return t.y0 + r * t.r + rowLift(t, r) * g;
 }
-// position s of the corner entrance stair in row r: 0.5 m further along per row down from the aisle it ends at
+// position s of the corner entrance stair in row r: `slope` m further along per row down from the aisle it ends at
 function entryAt(st, r) {
   const t = st.tiers[st.entry.key], oS = t.o0 + r * t.d + t.d * 0.55, a = -oS + 0.6, b = st.len + oS - 0.6;
-  return a + (b - a) * st.entry.f + st.entry.side * (st.entry.rows - r) * 0.5;
+  return a + (b - a) * st.entry.f + st.entry.side * (st.entry.rows - r) * st.entry.slope;
 }
 
 // the lower-tier wing of the main stand: its last sector (H11) and the tier run on past the stand's end
@@ -1488,8 +1488,23 @@ const AISLE = 1.8; // width of the empty stair gap left between neighbouring sec
   for (const st of STANDS) {
     if (st.fan) {
       if (st.entry) {
-        const t = st.tiers[st.entry.key], c0 = entryAt(st, 0);
-        for (let k = 0; k < 3; k++) boxL(st, c0 - 0.85, c0 + 0.85, -1.2 + k * 0.4, 0.02, 0, (k + 1) * t.y0 / 3, stairMat);
+        const t = st.tiers[st.entry.key], c0 = entryAt(st, 0), h = st.entry.half, rails = [];
+        for (let k = 0; k < 3; k++) boxL(st, c0 - h, c0 + h, -1.2 + k * 0.4, 0.02, 0, (k + 1) * t.y0 / 3, stairMat);
+        // glass balustrades either side, stepping up with the rows, in teal frames (top rail and posts)
+        for (const dir of [-1, 1]) {
+          const pts = [];
+          for (let r = 0; r <= st.entry.rows; r++) {
+            const o = t.o0 + (r + 0.5) * t.d, sx = entryAt(st, r) + dir * h;
+            pts.push(W(st, sx, o, tierY(st, t, r, sx, o)));
+          }
+          for (let i = 0; i + 1 < pts.length; i++) {
+            glassPanel(pts[i], pts[i + 1], 0.9);
+            rails.push([pts[i].clone().setY(pts[i].y + 0.95), pts[i + 1].clone().setY(pts[i + 1].y + 0.95)]);
+            if (i % 2 === 0) rails.push([pts[i], pts[i].clone().setY(pts[i].y + 0.95)]);
+          }
+        }
+        const rm = []; for (const [p, q] of rails) member(rm, p, q, 0.05);
+        instancedMembers(rm, steelBlue, false);
       }
       // corner stands: the tunnel opens in the middle of its sector; the fan widens with depth, so its
       // centre line drifts sideways from row to row and the glass balustrades follow it
@@ -1594,7 +1609,7 @@ function buildSector(st, key, name, s0, s1, extra) {
     let rz = !v ? zones : st.fan ? [[(r0 + r1) / 2 - 1.6, (r0 + r1) / 2 + 1.6]] : zones.concat(st.aisleS[key].map(a => [a - VOM_HALF, a + VOM_HALF]));
     if (press) rz = rz.concat(press(r));
     if (st.tunnel && key === st.tunnel.key && r < st.tunnel.rows) rz = rz.concat([[st.tunnel.s0 - 0.3, st.tunnel.s1 + 0.3]]);
-    if (st.entry && key === st.entry.key && r <= st.entry.rows) { const c = entryAt(st, r); rz = rz.concat([[c - 0.85, c + 0.85]]); }
+    if (st.entry && key === st.entry.key && r <= st.entry.rows) { const c = entryAt(st, r), h = st.entry.half + 0.1; rz = rz.concat([[c - h, c + h]]); }
     for (const [za, zb] of rz) out = out.flatMap(([a, b]) => (zb <= a || za >= b) ? [[a, b]] : [[a, za], [zb, b]].filter(([p, q]) => q - p > 0.3));
     return (segsCache[r] = out);
   };
