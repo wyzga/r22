@@ -615,7 +615,8 @@ const grassTex = canvasTex(GX * PPM, GZ * PPM, (g, w, h) => {
     for (const t of [-1, 1]) { const m = Math.atan2(-t, -s); g.beginPath(); g.arc(X(s * hx), Z(t * hz), 1 * PPM, m - Math.PI / 4, m + Math.PI / 4); g.stroke(); }
   }
 }, false);
-add(new THREE.Mesh(new THREE.PlaneGeometry(GX, GZ).rotateX(-Math.PI / 2),
+const PITS = [];   // sunken dugouts: world rectangles cut out of the turf (see carvePits)
+const grass = add(new THREE.Mesh(new THREE.PlaneGeometry(GX, GZ).rotateX(-Math.PI / 2),
   TX_GRASS ? texMat(TX_GRASS, 3, { color: 0xc6d8bc, roughness: 0.95 }) : new THREE.MeshStandardMaterial({ color: 0x327a35, roughness: 0.95 })));
 const marks = add(new THREE.Mesh(new THREE.PlaneGeometry(GX, GZ).rotateX(-Math.PI / 2),
   new THREE.MeshStandardMaterial({ map: grassTex, transparent: true, depthWrite: false, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 })));
@@ -997,9 +998,24 @@ for (const st of STANDS) {
         }, false), transparent: true,
       }), false);
       // dugouts with red roofs and the players' tunnel, set into the front of the stand
+      // sunken dugouts, as photographed: a pit cut into the touchline strip (floor 1.05 m below the turf), a low concrete
+      // kerb on the pitch side, red seats along the navy back wall and a thin roof that stays below the first row's eyes
       for (const s of [L / 2 - 16, L / 2 + 16]) {
-        boxL(st, s - 7, s + 7, -2.6, -0.3, 0, 2.0, new THREE.MeshStandardMaterial({ color: 0x9fb3d8, transparent: true, opacity: 0.45, roughness: 0.2 }));
-        boxL(st, s - 7.2, s + 7.2, -2.8, -0.2, 2.0, 2.25, new THREE.MeshStandardMaterial({ color: 0xaa3e4e, roughness: 0.6 }), { cast: true });
+        const FL = -1.05, s0 = s - 7.2, s1 = s + 7.2, o0 = -2.8, o1 = -0.2;
+        const cs = [W(st, s0, o0, 0), W(st, s1, o1, 0)];
+        PITS.push([Math.min(cs[0].x, cs[1].x), Math.max(cs[0].x, cs[1].x), Math.min(cs[0].z, cs[1].z), Math.max(cs[0].z, cs[1].z)]);
+        const concrete = new THREE.MeshStandardMaterial({ color: 0x8c9096, roughness: 0.95 }), asphalt = new THREE.MeshStandardMaterial({ color: 0x3b3e44, roughness: 1 });
+        const navy = new THREE.MeshStandardMaterial({ color: 0x1d3a7a, roughness: 0.6 }), seatRed = new THREE.MeshStandardMaterial({ color: 0xc8283a, roughness: 0.7 });
+        boxL(st, s0, s1, o0, o1, FL - 0.03, FL, asphalt);                                   // floor
+        boxL(st, s0, s1, o0, o0 + 0.2, FL, 0.35, concrete, { cast: true });                // kerb on the pitch side, 0.35 m over the turf
+        for (const e of [s0, s1 - 0.2]) boxL(st, e, e + 0.2, o0, o1, FL, 0, concrete);   // side walls
+        boxL(st, s0, s1, o1 - 0.35, o1, FL, 0.45, navy);                                   // back wall
+        for (let k = 0; k < 12; k++) {                                                      // seats
+          const c = s0 + 0.8 + k * ((s1 - s0 - 1.6) / 11);
+          boxL(st, c - 0.28, c + 0.28, o1 - 1.15, o1 - 0.45, FL, FL + 0.42, seatRed);
+          boxL(st, c - 0.28, c + 0.28, o1 - 0.62, o1 - 0.45, FL + 0.42, FL + 1.18, seatRed);
+        }
+        boxL(st, s0 - 0.1, s1 + 0.1, o0 + 0.1, o1, 0.62, 0.68, new THREE.MeshStandardMaterial({ color: 0x9fb3d8, transparent: true, opacity: 0.4, roughness: 0.2 }));   // clear roof, low enough not to hide the first row
       }
       // players' tunnel: a passage with glass sides under the front rows to glass doors, a concrete slab over it, and in
       // front a blue fabric canopy with side drapes reaching out towards the touch line
@@ -2012,6 +2028,23 @@ const toggle = (id, fn) => { const b = $(id); b.onclick = () => { const on = b.g
 }
 toggle('tLabels', on => { labelsOn = on; applyModeVisuals(); });
 
+// Cut the dugout pits out of the turf and its markings layer: the pitch plane becomes a few rectangles around the holes
+(function carvePits() {
+  if (!PITS.length) return;
+  const zs = [...new Set(PITS.map(r => r[2].toFixed(2)))], ze = [...new Set(PITS.map(r => r[3].toFixed(2)))];
+  if (zs.length !== 1 || ze.length !== 1) { console.warn('dugout pits differ in z, turf left whole'); return; }
+  const z0 = PITS[0][2], z1 = PITS[0][3], xs = PITS.map(r => [r[0], r[1]]).sort((a, b) => a[0] - b[0]);
+  const rects = [[-GX / 2, GX / 2, -GZ / 2, z0], [-GX / 2, GX / 2, z1, GZ / 2]];
+  let x = -GX / 2; for (const [a, b] of xs) { rects.push([x, a, z0, z1]); x = b; } rects.push([x, GX / 2, z0, z1]);
+  const parts = rects.filter(r => r[1] - r[0] > 0.01 && r[3] - r[2] > 0.01).map(([x0, x1, zA, zB]) => {
+    const g = new THREE.PlaneGeometry(x1 - x0, zB - zA).rotateX(-Math.PI / 2).translate((x0 + x1) / 2, 0, (zA + zB) / 2), pos = g.attributes.position, uv = g.attributes.uv;
+    for (let i = 0; i < pos.count; i++) uv.setXY(i, (pos.getX(i) + GX / 2) / GX, 1 - (pos.getZ(i) + GZ / 2) / GZ);
+    return g;
+  });
+  const merged = mergeGeometries(parts);
+  grass.geometry.dispose(); grass.geometry = merged; marks.geometry.dispose(); marks.geometry = merged;
+})();
+
 // ---------------------------------------------------------------------------
 // Match simulation ("Włącz mecz"): two AI-driven teams of fan-style figures pass the ball about.
 // Watch only, nothing here takes input. Sounds are real recordings in audio/ (generated once with
@@ -2240,5 +2273,5 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 $('loading').remove();
-window.__stadium = { match, sectors, totalSeats, capacity, selectSeat, sectorByName, camera, controls, render: () => renderer.render(scene, camera) };
+window.__stadium = { PITS, scene, match, sectors, totalSeats, capacity, selectSeat, sectorByName, camera, controls, render: () => renderer.render(scene, camera) };
 </script>
