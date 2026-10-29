@@ -303,14 +303,14 @@ const STANDS = [
   },
   {
     id: 'G', label: 'Trybuna G za bramką', kind: 'end', roof: 'columns', P0: [-61.5, 0, -33.5], t: [0, 0, 1], n: [1, 0, 0], len: 67, back: 38, roofY: 20.5,
-    tiers: { single: { o0: 0, y0: 1.1, rows: 32, d: 0.80, r: 0.375, label: 'jeden poziom' } },
+    tiers: { single: { o0: 0, y0: 1.1, rows: 32, d: 1.0, r: 0.375, label: 'jeden poziom' } },   // 32 rows, 1.0 m apart: the stand is 32 m deep, as deep as the corner stands it joins (31.5 m)
     sectors: { single: alloc(range('G', 1, 5), 0, 67) },
     aisleU: { single: [0.14, 0.3, 0.5, 0.7, 0.86] },
     vom: [{ key: 'single', rows: [13, 20] }],
   },
   {
     id: 'C', label: 'Trybuna C za bramką', kind: 'end', roof: 'columns', P0: [61.5, 0, 33.5], t: [0, 0, -1], n: [-1, 0, 0], len: 67, back: 38, roofY: 20.5,
-    tiers: { single: { o0: 0, y0: 1.1, rows: 32, d: 0.80, r: 0.375, label: 'jeden poziom' } },
+    tiers: { single: { o0: 0, y0: 1.1, rows: 32, d: 1.0, r: 0.375, label: 'jeden poziom' } },   // 32 rows, 1.0 m apart: the stand is 32 m deep, as deep as the corner stands it joins (31.5 m)
     sectors: { single: alloc(range('C', 1, 5), 0, 67) },
     aisleU: { single: [0.14, 0.3, 0.5, 0.7, 0.86] },
     vom: [{ key: 'single', rows: [13, 20] }],
