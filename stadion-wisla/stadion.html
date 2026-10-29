@@ -539,12 +539,21 @@ function cornerFill(pts, h) {
     add(new THREE.Mesh(bg, whiteBand));
   }
 }
+// centre s(o) of each corner exit (mid-sector, drifting sideways with depth as the fan widens), in s order
+function cornerExitCentres(st, vb) {
+  const t = st.tiers[vb.key];
+  return st.sectors[vb.key].filter(([n]) => !vb.only || vb.only.includes(n)).map(([, f0, f1]) => (f0 + f1) / 2).sort((p, q) => p - q)
+    .map(f => o => { const a = -(o + t.d * 0.55) + 0.6, b = st.len + o + t.d * 0.55 - 0.6; return a + (b - a) * f; });
+}
+const CORNER_EXIT_HALF = 1.6;
 // closed (o, y) profile swept across a fan-shaped corner stand (row at depth o spans s ∈ [-o, len + o])
 function fanSolid(st, pts, mat, opt = {}) {
   // opt.endPts: the profile at the goal-end edge, when it differs (same number of points)
   const pa = opt.endPts && st.endS0 ? opt.endPts : pts, pb = opt.endPts && !st.endS0 ? opt.endPts : pts;
-  const A = j => { const [o, y] = pa[j]; return W(st, -o, o, y).toArray(); };
-  const B = j => { const [o, y] = pb[j]; return W(st, st.len + o, o, y).toArray(); };
+  // opt.sA / opt.sB: the slice's edges s(o), when only part of the fan is built (between exits)
+  const sA = opt.sA || (o => -o), sB = opt.sB || (o => st.len + o);
+  const A = j => { const [o, y] = pa[j]; return W(st, sA(o), o, y).toArray(); };
+  const B = j => { const [o, y] = pb[j]; return W(st, sB(o), o, y).toArray(); };
   const pos = [], m = pts.length;
   for (let j = 0; j < m; j++) {
     const k = (j + 1) % m;
@@ -890,8 +899,19 @@ for (const st of STANDS) {
   const T = st.tiers, L = st.len;
   if (st.kind === 'corner') {
     const lo = T.lower, up = T.upper, loEnd = tierEnd(lo), upEnd = tierEnd(up), R = st.roofY;
-    for (const key of Object.keys(T)) standMeshes.push(fanSolid(st, tierProfile(T[key], key), concrete, {
-      cast: true, endPts: T[key].rEnd ? tierProfile(T[key], key, r => rowLift(T[key], r)) : null }));
+    for (const key of Object.keys(T)) {
+      const t = T[key], prof = tierProfile(t, key), vb = (st.vom || []).find(v => v.key === key);
+      if (!vb) { standMeshes.push(fanSolid(st, prof, concrete, { cast: true, endPts: t.rEnd ? tierProfile(t, key, r => rowLift(t, r)) : null })); continue; }
+      // exits cut into the tier as on the other stands: slices of the fan between them, and the recess at each
+      const rec = recessProfile(t, key, vb.rows), h = CORNER_EXIT_HALF;
+      let from;
+      for (const c of cornerExitCentres(st, vb)) {
+        standMeshes.push(fanSolid(st, prof, concrete, { cast: true, sA: from, sB: o => c(o) - h }));
+        standMeshes.push(fanSolid(st, rec, concrete, { cast: true, sA: o => c(o) - h, sB: o => c(o) + h }));
+        from = o => c(o) + h;
+      }
+      standMeshes.push(fanSolid(st, prof, concrete, { cast: true, sA: from }));
+    }
     const gO = loEnd + 1.15, yF = tierTop(lo);
     fanSolid(st, [[gO + 0.15, 0], [gO + 0.15, up.y0 - 1.4], [upEnd, tierTop(up) - 1.8], [upEnd, 0]], coreMat);
     fanSolid(st, [[loEnd, yF - 0.15], [gO, yF - 0.15], [gO, yF], [loEnd, yF]], coreMat);
@@ -1481,19 +1501,17 @@ const AISLE = 1.8; // width of the empty stair gap left between neighbouring sec
         const t = st.tiers[st.entry.key], c0 = entryAt(st, 0), h = st.entry.half;
         for (let k = 0; k < 3; k++) boxL(st, c0 - h, c0 + h, -1.2 + k * 0.4, 0.02, 0, (k + 1) * t.y0 / 3, stairMat);
       }
-      // corner stands: the tunnel opens in the middle of its sector (no railings on the corners)
+      // corner exits, as on the other stands: glass double doors in the back wall of the recess under a green
+      // exit sign (the corners have no railings)
       for (const vb of st.vom || []) {
-        const t = st.tiers[vb.key], [v0, v1] = vb.rows, oA = t.o0 + v0 * t.d, oB = t.o0 + (v1 + 1) * t.d;
-        const yA = t.y0 + v0 * t.r, yB = t.y0 + v1 * t.r;
-        const sAt = (f, o) => { const a = -(o + t.d * 0.55) + 0.6, b = st.len + o + t.d * 0.55 - 0.6; return a + (b - a) * f; };
-        for (const [n, f0, f1] of st.sectors[vb.key]) {
-          if (vb.only && !vb.only.includes(n)) continue;
-          const f = (f0 + f1) / 2;
-          const sb = sAt(f, oB);
-          boxL(st, sb - 1.57, sb + 1.57, oB - 0.25, oB, yA - 0.3, yB + t.r, coreMat);   // back wall up to the tread behind
-          const dH = Math.min(2.1, yB + t.r - yA - 0.45);   // door height under the lowered wall, room for the exit sign
-          plane(st, sb, 2.0, oB - 0.27, yA + dH / 2, dH, new THREE.MeshStandardMaterial({ color: 0x1a2230, roughness: 0.3, metalness: 0.4 }));
-          plane(st, sb, 0.6, oB - 0.28, yA + dH + 0.2, 0.22, new THREE.MeshStandardMaterial({ color: 0x1f8a4c, emissive: 0x1f8a4c, emissiveIntensity: 0.6 }));
+        const t = st.tiers[vb.key], [v0, v1] = vb.rows, oB = t.o0 + (v1 + 1) * t.d;
+        const yA = t.y0 + v0 * t.r, yT = t.y0 + (v1 + 1) * t.r, dH = Math.min(2.2, yT - yA - 0.35), dW = 2.0;
+        for (const c of cornerExitCentres(st, vb)) {
+          const sb = c(oB);
+          plane(st, sb, dW, oB - 0.02, yA + dH / 2, dH, doorGlassMat);
+          for (const e of [-dW / 2, 0, dW / 2]) boxL(st, sb + e - 0.05, sb + e + 0.05, oB - 0.06, oB, yA, yA + dH, doorFrameMat);
+          boxL(st, sb - dW / 2 - 0.05, sb + dW / 2 + 0.05, oB - 0.06, oB, yA + dH - 0.08, yA + dH, doorFrameMat);
+          if (yT - yA - dH > 0.32) plane(st, sb, 0.5, oB - 0.03, yA + dH + 0.17, 0.2, exitSignMat);
         }
       }
       continue;
@@ -1578,7 +1596,7 @@ function buildSector(st, key, name, s0, s1, extra) {
     // step off the landing and go on up the sector
     const WALK = 0.85;
     const v = (st.vom || []).find(v => v.key === key && r >= v.rows[0] && r <= v.rows[1] + 1 && (!v.only || v.only.includes(name)));
-    const exitAt = c => { const h = st.fan ? 1.6 : VOM_HALF; return r <= v.rows[1] ? [[c - h - WALK, c + h + WALK]] : [[c - h - WALK, c - h + 0.3], [c + h - 0.3, c + h + WALK]]; };
+    const exitAt = c => { const h = st.fan ? CORNER_EXIT_HALF : VOM_HALF; return r <= v.rows[1] ? [[c - h - WALK, c + h + WALK]] : [[c - h - WALK, c - h + 0.3], [c + h - 0.3, c + h + WALK]]; };
     let rz = !v ? zones : st.fan ? exitAt((r0 + r1) / 2) : zones.concat(st.aisleS[key].flatMap(exitAt));
     if (press) rz = rz.concat(press(r));
     if (st.tunnel && key === st.tunnel.key && r < st.tunnel.rows) rz = rz.concat([[st.tunnel.s0 - 0.3, st.tunnel.s1 + 0.3]]);
