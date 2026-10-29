@@ -1507,17 +1507,32 @@ const AISLE = 1.8; // width of the empty stair gap left between neighbouring sec
         for (let k = 0; k < 3; k++) boxL(st, c0 - h, c0 + h, -1.2 + k * 0.4, 0.02, 0, (k + 1) * t.y0 / 3, stairMat);
       }
       // corner exits, as on the other stands: glass double doors in the back wall of the recess under a green
-      // exit sign (the corners have no railings)
+      // exit sign, and low railings (teal posts and rail, glass infill) along its sides and over the doors
       for (const vb of st.vom || []) {
-        const t = st.tiers[vb.key], [v0, v1] = vb.rows, oB = t.o0 + (v1 + 1) * t.d;
+        const t = st.tiers[vb.key], [v0, v1] = vb.rows, oB = t.o0 + (v1 + 1) * t.d, h = CORNER_EXIT_HALF, rails = [];
         const yA = t.y0 + v0 * t.r, yT = t.y0 + (v1 + 1) * t.r, dH = Math.min(2.2, yT - yA - 0.35), dW = 2.0;
         for (const c of cornerExitCentres(st, vb)) {
+          for (const dir of [-1, 1]) {
+            const edge = [];
+            for (let r = v0; r <= v1 + 1; r++) { const o = t.o0 + r * t.d; edge.push(W(st, c(o) + dir * h, o, t.y0 + r * t.r)); }
+            for (let i = 0; i + 1 < edge.length; i++) {
+              glassPanel(edge[i], edge[i + 1], 0.8);
+              rails.push([edge[i].clone().setY(edge[i].y + 0.9), edge[i + 1].clone().setY(edge[i + 1].y + 0.9)]);
+              if (i % 2 === 0) rails.push([edge[i], edge[i].clone().setY(edge[i].y + 0.9)]);
+            }
+          }
+          const l = W(st, c(oB) - h, oB + 0.05, yT), rr = W(st, c(oB) + h, oB + 0.05, yT), m = l.clone().lerp(rr, 0.5);
+          glassPanel(l, rr, 0.8);
+          rails.push([l.clone().setY(yT + 0.9), rr.clone().setY(yT + 0.9)]);
+          for (const p of [l, m, rr]) rails.push([p, p.clone().setY(yT + 0.9)]);
           const sb = c(oB);
           plane(st, sb, dW, oB - 0.02, yA + dH / 2, dH, doorGlassMat);
           for (const e of [-dW / 2, 0, dW / 2]) boxL(st, sb + e - 0.05, sb + e + 0.05, oB - 0.06, oB, yA, yA + dH, doorFrameMat);
           boxL(st, sb - dW / 2 - 0.05, sb + dW / 2 + 0.05, oB - 0.06, oB, yA + dH - 0.08, yA + dH, doorFrameMat);
           if (yT - yA - dH > 0.32) plane(st, sb, 0.5, oB - 0.03, yA + dH + 0.17, 0.2, exitSignMat);
         }
+        const rm = []; for (const [p, q] of rails) member(rm, p, q, 0.05);
+        instancedMembers(rm, steelBlue, false);
       }
       continue;
     }
