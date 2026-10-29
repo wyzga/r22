@@ -135,6 +135,7 @@
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   .score { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; align-items: baseline; gap: 10px; padding: 8px 16px; background: rgba(16, 24, 32, 0.86); color: #fff; border-radius: var(--radius); border-top: 2px solid var(--red); font: 600 15px var(--sans); pointer-events: none; white-space: nowrap; }
+  .score[hidden] { display: none; }
   .score b { font-size: 24px; font-variant-numeric: tabular-nums; }
   .score i { font-style: normal; opacity: .6; }
   .score em { font-style: normal; font-size: 13px; opacity: .75; min-width: 46px; text-align: right; }
@@ -2049,7 +2050,11 @@ toggle('tLabels', on => { labelsOn = on; applyModeVisuals(); });
     return g;
   });
   const merged = mergeGeometries(parts);
-  grass.geometry.dispose(); grass.geometry = merged; marks.geometry.dispose(); marks.geometry = merged;
+  marks.geometry.dispose(); marks.geometry = merged;
+  // the turf gets its own copy with UVs in metres, so its texture keeps tiling every few metres
+  grass.geometry.dispose(); grass.geometry = merged.clone();
+  const tile = grass.material.userData && grass.material.userData.tile;
+  if (tile) applyWorldUV(grass, tile);
 })();
 
 // ---------------------------------------------------------------------------
