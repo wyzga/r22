@@ -897,12 +897,6 @@ for (const st of STANDS) {
     const lo = T.lower, up = T.upper, loEnd = tierEnd(lo), upEnd = tierEnd(up), R = st.roofY;
     for (const key of Object.keys(T)) standMeshes.push(fanSolid(st, tierProfile(T[key], key), concrete, {
       cast: true, endPts: T[key].rEnd ? tierProfile(T[key], key, r => rowLift(T[key], r)) : null }));
-    // low glass balustrade along the goal-end edge of the lower tier, where it meets the goal-end stand
-    {
-      const edgeS = o => st.endS0 ? -o + 0.2 : L + o - 0.2, pts = [];
-      for (let r = 0; r <= lo.rows; r++) { const o = lo.o0 + Math.min(r, lo.rows - 0.01) * lo.d; const rr = Math.min(r, lo.rows - 1); pts.push(W(st, edgeS(o), o, lo.y0 + rr * lo.r + rowLift(lo, rr))); }
-      for (let i = 0; i + 1 < pts.length; i++) glassPanel(pts[i], pts[i + 1], 0.6);
-    }
     const gO = loEnd + 1.15, yF = tierTop(lo);
     fanSolid(st, [[gO + 0.15, 0], [gO + 0.15, up.y0 - 1.4], [upEnd, tierTop(up) - 1.8], [upEnd, 0]], coreMat);
     fanSolid(st, [[loEnd, yF - 0.15], [gO, yF - 0.15], [gO, yF], [loEnd, yF]], coreMat);
@@ -1488,26 +1482,11 @@ const AISLE = 1.8; // width of the empty stair gap left between neighbouring sec
   for (const st of STANDS) {
     if (st.fan) {
       if (st.entry) {
-        const t = st.tiers[st.entry.key], c0 = entryAt(st, 0), h = st.entry.half, rails = [];
+        // steps up from the walkway; the corners have no railings
+        const t = st.tiers[st.entry.key], c0 = entryAt(st, 0), h = st.entry.half;
         for (let k = 0; k < 3; k++) boxL(st, c0 - h, c0 + h, -1.2 + k * 0.4, 0.02, 0, (k + 1) * t.y0 / 3, stairMat);
-        // glass balustrades either side, stepping up with the rows, in teal frames (top rail and posts)
-        for (const dir of [-1, 1]) {
-          const pts = [];
-          for (let r = 0; r <= st.entry.rows; r++) {
-            const o = t.o0 + (r + 0.5) * t.d, sx = entryAt(st, r) + dir * h;
-            pts.push(W(st, sx, o, tierY(st, t, r, sx, o)));
-          }
-          for (let i = 0; i + 1 < pts.length; i++) {
-            glassPanel(pts[i], pts[i + 1], 0.9);
-            rails.push([pts[i].clone().setY(pts[i].y + 0.95), pts[i + 1].clone().setY(pts[i + 1].y + 0.95)]);
-            if (i % 2 === 0) rails.push([pts[i], pts[i].clone().setY(pts[i].y + 0.95)]);
-          }
-        }
-        const rm = []; for (const [p, q] of rails) member(rm, p, q, 0.05);
-        instancedMembers(rm, steelBlue, false);
       }
-      // corner stands: the tunnel opens in the middle of its sector; the fan widens with depth, so its
-      // centre line drifts sideways from row to row and the glass balustrades follow it
+      // corner stands: the tunnel opens in the middle of its sector (no railings on the corners)
       for (const vb of st.vom || []) {
         const t = st.tiers[vb.key], [v0, v1] = vb.rows, oA = t.o0 + v0 * t.d, oB = t.o0 + (v1 + 1) * t.d;
         const yA = t.y0 + v0 * t.r, yB = t.y0 + v1 * t.r;
@@ -1515,13 +1494,8 @@ const AISLE = 1.8; // width of the empty stair gap left between neighbouring sec
         for (const [n, f0, f1] of st.sectors[vb.key]) {
           if (vb.only && !vb.only.includes(n)) continue;
           const f = (f0 + f1) / 2;
-          for (const dir of [-1, 1]) {
-            const p = o => sAt(f, o) + dir * 1.45;
-            glassPanel(W(st, p(oA), oA, yA - 0.1), W(st, p(oB), oB, yB - 0.1), 0.6);
-          }
           const sb = sAt(f, oB);
-          boxL(st, sb - 1.57, sb + 1.57, oB - 0.25, oB, yA - 0.3, yB + t.r, coreMat);   // back wall up to the tread behind, glass above
-          glassPanel(W(st, sb - 1.57, oB - 0.12, yB + t.r), W(st, sb + 1.57, oB - 0.12, yB + t.r), 0.6);
+          boxL(st, sb - 1.57, sb + 1.57, oB - 0.25, oB, yA - 0.3, yB + t.r, coreMat);   // back wall up to the tread behind
           const dH = Math.min(2.1, yB + t.r - yA - 0.45);   // door height under the lowered wall, room for the exit sign
           plane(st, sb, 2.0, oB - 0.27, yA + dH / 2, dH, new THREE.MeshStandardMaterial({ color: 0x1a2230, roughness: 0.3, metalness: 0.4 }));
           plane(st, sb, 0.6, oB - 0.28, yA + dH + 0.2, 0.22, new THREE.MeshStandardMaterial({ color: 0x1f8a4c, emissive: 0x1f8a4c, emissiveIntensity: 0.6 }));
