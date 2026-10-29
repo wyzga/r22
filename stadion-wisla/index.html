@@ -302,14 +302,14 @@ const STANDS = [
     vom: [{ key: 'lower', rows: [5, 10] }, { key: 'upper', rows: [3, 8] }],
   },
   {
-    id: 'G', label: 'Trybuna G za bramką', kind: 'end', roof: 'columns', P0: [-61.5, 0, -33.5], t: [0, 0, 1], n: [1, 0, 0], len: 67, back: 38, roofY: 20.5,
+    id: 'G', label: 'Trybuna G za bramką', vomHalf: 0.9, kind: 'end', roof: 'columns', P0: [-61.5, 0, -33.5], t: [0, 0, 1], n: [1, 0, 0], len: 67, back: 38, roofY: 20.5,
     tiers: { single: { o0: 0, y0: 1.1, rows: 32, d: 1.0, r: 0.54, label: 'jeden poziom' } },   // 32 rows, 1.0 m deep, 0.54 m high (28°, like the corner stands): 32 m deep and 18 m high, so the top meets the corners' upper tiers (17.9 m)
     sectors: { single: alloc(range('G', 1, 5), 0, 67) },
     aisleU: { single: [0.14, 0.3, 0.5, 0.7, 0.86] },
     vom: [{ key: 'single', rows: [13, 20] }],
   },
   {
-    id: 'C', label: 'Trybuna C za bramką', kind: 'end', roof: 'columns', P0: [61.5, 0, 33.5], t: [0, 0, -1], n: [-1, 0, 0], len: 67, back: 38, roofY: 20.5,
+    id: 'C', label: 'Trybuna C za bramką', vomHalf: 0.9, kind: 'end', roof: 'columns', P0: [61.5, 0, 33.5], t: [0, 0, -1], n: [-1, 0, 0], len: 67, back: 38, roofY: 20.5,
     tiers: { single: { o0: 0, y0: 1.1, rows: 32, d: 1.0, r: 0.54, label: 'jeden poziom' } },   // 32 rows, 1.0 m deep, 0.54 m high (28°, like the corner stands): 32 m deep and 18 m high, so the top meets the corners' upper tiers (17.9 m)
     sectors: { single: alloc(range('C', 1, 5), 0, 67) },
     aisleU: { single: [0.14, 0.3, 0.5, 0.7, 0.86] },
@@ -1490,7 +1490,7 @@ function buildSector(st, key, name, s0, s1, extra) {
   // runs of seats in a row: the sector's span minus the stair aisles (and the stand ends) that cross it
   const zones = st.fan ? [] : [...st.aisleS[key], 0, st.len].map(a => [a - AISLE / 2, a + AISLE / 2]);
   const segsCache = [];
-  const VOM_HALF = 2.1;   // the exit tunnel and its walls take this much either side of the stair
+  const VOM_HALF = st.vomHalf || 2.1;   // the exit tunnel and its walls take this much either side of the stair (G, C: 0.9, as photographed)
   const segs = r => {
     if (segsCache[r]) return segsCache[r];
     const [r0, r1] = bounds(r);
@@ -1509,7 +1509,7 @@ function buildSector(st, key, name, s0, s1, extra) {
   // seat spacing chosen so the sector holds its ticketing count (never tighter than 41.5 cm)
   const target = builtSeats(name);
   // tightest spacing 41 cm, or 40 cm where a sector cannot hold its count otherwise
-  const minW = target && count(0.41) < target ? 0.4 : 0.41;
+  const minW = 0.36;   // tightest seat spacing (was 0.41 m; 0.36 m = 36 cm, the step on which G/C reach ~35 seats a row)
   let Wd = vip ? 0.6 : 0.5;
   if (target) {
     let lo = minW, hi = name === 'PRASA' ? 2.2 : 1.2;   // press places are wide desk places
