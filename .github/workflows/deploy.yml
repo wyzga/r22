@@ -1,0 +1,30 @@
+name: Deploy r22 to Firebase Hosting
+
+# Every push to main publishes the stadium to the shared gen-lang-client-0339658958 site (wyzga.com/r22/).
+# tools/deploy_r22.py changes only the /r22/ files of the live release; the rest of wyzga.com keeps its
+# files and headers. index.html is stadion-wisla/stadion.html (build.mjs only inlines it for local use).
+
+on:
+  push:
+    branches: [main]
+    paths: ['stadion-wisla/**', 'tools/deploy_r22.py', '.github/workflows/deploy.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r22-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish /r22/ to wyzga.com
+        env:
+          FIREBASE_SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_R22 }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python3 tools/deploy_r22.py
