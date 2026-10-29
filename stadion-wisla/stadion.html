@@ -1680,14 +1680,20 @@ function buildSector(st, key, name, s0, s1, extra) {
 }
 // Seat numbers run on through a row across the sectors of a tier on the stands whose sectors share one letter
 // (E, G, C and the corners): the lowest-numbered sector starts at 1 and the next carries on, e.g. E11 1–47,
-// E12 48–96. The main stand (A, H, VIP, ADM, press) keeps its numbering per sector.
+// E12 48–96; likewise the main stand's upper tier (H21 … A23). Elsewhere on the main stand, numbering is per sector.
 for (const st of STANDS) for (const key of Object.keys(st.sectors)) {
-  const secs = sectors.filter(x => x.st === st && x.key === key);
-  if (secs.length < 2 || !secs.every(x => x.name[0] === st.id)) continue;
-  secs.sort((a, b) => a.name.localeCompare(b.name, 'pl', { numeric: true }));
   const along = p => (p.x - st.P0.x) * st.t.x + (p.z - st.P0.z) * st.t.z;
-  const mean = x => x.seats.reduce((a, p) => a + along(p), 0) / x.seats.length;
-  const dir = mean(secs[0]) <= mean(secs[secs.length - 1]) ? 1 : -1, next = new Map();
+  const meanS = x => x.seats.reduce((m, p) => m + along(p), 0) / x.seats.length;
+  let secs = sectors.filter(x => x.st === st && x.key === key);
+  if (st.id === 'A' && key === 'upper') {
+    // the main stand's upper tier runs on like stand E, from the viewer's left (H21 by the pavilion) to A23;
+    // the press stand keeps its own numbers
+    secs = secs.filter(x => x.name !== 'PRASA').sort((a, b) => meanS(b) - meanS(a));
+  } else {
+    if (secs.length < 2 || !secs.every(x => x.name[0] === st.id)) continue;
+    secs.sort((a, b) => a.name.localeCompare(b.name, 'pl', { numeric: true }));
+  }
+  const dir = meanS(secs[0]) <= meanS(secs[secs.length - 1]) ? 1 : -1, next = new Map();
   for (const sec of secs) {
     for (const [row, list] of sec.rows) {
       list.sort((a, b) => dir * (along(sec.seats[a]) - along(sec.seats[b])));   // row list kept in numbering order
