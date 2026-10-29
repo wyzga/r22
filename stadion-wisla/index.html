@@ -1180,14 +1180,32 @@ instancedMembers(members.cable, cableMat, false);
   const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, z))), { depth: H, bevelEnabled: false });
   g.rotateX(Math.PI / 2); g.translate(0, H, 0);
   add(new THREE.Mesh(g, plinthMat), { cast: true });
-  // entrance in the plinth front (the front is 13.4 m from the drum's axis)
-  const teal = new THREE.MeshStandardMaterial({ color: 0x1f8fa0, roughness: 0.45, metalness: 0.4 });
-  const doorGlass = new THREE.MeshStandardMaterial({ color: 0x1d3a4a, roughness: 0.08, metalness: 0.7 });
-  diagBox(-6.2, -2.0, 13.2, 13.43, 0, 3.4, doorGlass);
-  for (const e of [-6.2, -4.8, -3.4, -2.0]) diagBox(e - 0.12, e + 0.12, 13.3, 13.6, 0, 3.4, teal);
-  diagBox(-6.32, -1.88, 13.3, 13.6, 3.2, 3.55, teal);
-  diagBox(-6.32, -1.88, 13.3, 13.6, 2.3, 2.45, teal);
-  for (let k = 0; k < 3; k++) diagBox(-6.6, -1.6, 13.4 + (2 - k) * 0.35, 13.75 + (2 - k) * 0.35, 0, 0.08 + k * 0.05, plinthMat);
+  // entrance in the plinth front (13.4 m from the drum's axis), as photographed: a portal framed in blue steel
+  // under a deep blue fascia, glazed either side in a blue grid and open in the middle, on a raised threshold
+  // reached by a short stair with blue handrails
+  const blue = new THREE.MeshStandardMaterial({ color: 0x2f6aa8, roughness: 0.5, metalness: 0.35 });
+  const glassP = new THREE.MeshStandardMaterial({ color: 0x5f7f9e, roughness: 0.06, metalness: 0.55 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x07090c, roughness: 1 });
+  const F = 13.43, v0 = -6.4, v1 = -1.8, yS = 0.75, yH = yS + 3.1, open = [-4.85, -3.35];
+  diagBox(v0 - 0.3, v1 + 0.3, F, F + 1.2, 0, yS, plinthMat);                          // raised threshold
+  diagBox(open[0], open[1], F - 1.2, F + 0.01, yS, yH, dark);                          // the open doorway
+  for (const [g0, g1] of [[v0, open[0]], [open[1], v1]]) {
+    diagBox(g0, g1, F - 0.02, F + 0.03, yS, yH, glassP);                               // glazing
+    for (let i = 0; i <= 2; i++) { const e = g0 + (g1 - g0) * i / 2; diagBox(e - 0.06, e + 0.06, F, F + 0.1, yS, yH, blue); }
+    for (const y of [yS + 0.9, yS + 1.8, yS + 2.6]) diagBox(g0, g1, F, F + 0.09, y - 0.04, y + 0.04, blue);
+  }
+  for (const e of [v0, open[0], open[1], v1]) diagBox(e - 0.12, e + 0.12, F, F + 0.18, yS, yH, blue);   // jambs
+  diagBox(v0 - 0.15, v1 + 0.15, F, F + 0.35, yH, yH + 0.55, blue);                     // fascia
+  // stair: five steps from the walkway up to the threshold, handrails either side
+  const sw0 = open[0] - 0.25, sw1 = open[1] + 0.25, rails = [];
+  const at = (sv, sd, y) => new THREE.Vector3(cx, y, cz).addScaledVector(v, sv).addScaledVector(u, sd);
+  for (let k = 0; k < 5; k++) diagBox(sw0, sw1, F + 1.2 + k * 0.3, F + 1.5 + k * 0.3, 0, yS * (5 - k) / 5, plinthMat);
+  for (const e of [sw0 - 0.05, sw1 + 0.05]) {
+    rails.push([at(e, F + 2.7, 0.9), at(e, F + 1.2, yS + 0.9)], [at(e, F + 1.2, yS + 0.9), at(e, F + 0.3, yS + 0.9)]);
+    for (const [d, y] of [[F + 2.7, 0], [F + 1.95, yS / 2], [F + 1.2, yS], [F + 0.3, yS]]) rails.push([at(e, d, y), at(e, d, y + 0.9)]);
+  }
+  const rm = []; for (const [p, q] of rails) member(rm, p, q, 0.05);
+  instancedMembers(rm, blue, false);
   // the glass drum
   const R = 12, top = H + 12, rnd = rng(7);
   const drum = canvasTex(2048, 512, (c, w, h) => {
