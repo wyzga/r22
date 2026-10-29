@@ -1,0 +1,5 @@
+# local tool settings
+.claude/
+.impeccable/
+# texture no longer used by the page
+stadion-wisla/tex/sky.jpg
