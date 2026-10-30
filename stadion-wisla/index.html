@@ -617,7 +617,7 @@ function fitRow(ps, a, b, m) {
       cxSpec.band = !g ? cxSpec.band : cxSpec.band ? [Math.max(g[0], cxSpec.band[0]), Math.min(g[1], cxSpec.band[1])] : g;
     };
     const inCx = (r, a, b) => cx && r >= cx.rows[0] && r <= cx.rows[1] && b > cx.c(rowDepth(t, r)) - cx.h - 0.5 && a < cx.c(rowDepth(t, r)) + cx.h + 0.5;
-    const cand = [], wide = [], ws = [];
+    const cand = [], wide = [], ws = [], sw0 = 0.45;
     for (const [r, ps] of [...rows].sort((p, q) => p[0] - q[0])) {
       // (on the corners in number order, so neighbouring sectors never interleave)
       ps.sort(st.fan ? (a, b) => numDir * (a.num - b.num) : (a, b) => a.s - b.s);
@@ -642,11 +642,49 @@ function fitRow(ps, a, b, m) {
       }
     }
     // exits: gaps that carry on through three or more rows; the recess runs from the first of them to the last
-    const groups = [];
-    for (const [r, a, b] of cand) {
-      const g = groups.find(g => g.r1 === r - 1 && Math.min(b, g.b) - Math.max(a, g.a) > 0.5 * Math.min(b - a, g.b - g.a));
-      if (g) Object.assign(g, { r1: r, a, b }).pts.push([rowDepth(t, r), (a + b) / 2, b - a, r]);
-      else groups.push({ r0: r, r1: r, a, b, pts: [[rowDepth(t, r), (a + b) / 2, b - a, r]] });
+    const grouped = () => {
+      const groups = [];
+      for (const [r, a, b] of cand) {
+        const g = groups.find(g => g.r1 === r - 1 && Math.min(b, g.b) - Math.max(a, g.a) > 0.5 * Math.min(b - a, g.b - g.a));
+        if (g) Object.assign(g, { r1: r, a, b }).pts.push([rowDepth(t, r), (a + b) / 2, b - a, r]);
+        else groups.push({ r0: r, r1: r, a, b, pts: [[rowDepth(t, r), (a + b) / 2, b - a, r]] });
+      }
+      return groups;
+    };
+    let groups = grouped();
+    // the corners' upper tiers: in the run along the side stand the exit is the gap in the middle of the sector
+    // beyond the bend (as at B22 and D24, and as photographed at F22, where the plan's gap is narrower), not the
+    // one between that sector and the next nearer the bend. That one is cut down to the stair above it, and the
+    // seats between the two close up towards the bend, widening the exit's gap by as much.
+    if (st.fan && key === 'upper') {
+      const dir = st.endS0 ? 1 : -1, onSide = (r, m) => dir * m > (dir > 0 ? st.len : 0) + TAU * rowDepth(t, r);
+      const gaps = r => [...cand, ...st.stairs[key]].filter(g => g[0] === r && onSide(r, (g[1] + g[2]) / 2));
+      const farOf = (r, n) => gaps(r).filter(g => g !== n && g[2] - g[1] >= 2.2 && dir * (g[1] - n[1]) > 0).sort((p, q) => dir * (q[1] - p[1]))[0];
+      // (each gap of a group, as it stands in cand: found before any is moved)
+      const mine = new Map(groups.map(g => [g, new Map(g.pts.map(p => [p[3], cand.find(c => c[0] === p[3] && Math.abs((c[1] + c[2]) / 2 - p[1]) < 1e-6)]))]));
+      const own = (g, r) => mine.get(g).get(r);
+      for (const g of groups.filter(g => g.r1 - g.r0 >= 2)) {
+        const rs = g.pts.map(p => p[3]);
+        if (rs.some(r => !cand.includes(own(g, r)))) continue;
+        if (!rs.every(r => onSide(r, own(g, r)[1] / 2 + own(g, r)[2] / 2)) || !rs.some(r => farOf(r, own(g, r)))) continue;
+        const ov = (r, n) => st.stairs[key].find(s => s[0] === r && Math.min(s[2], n[2]) - Math.max(s[1], n[1]) > 0);
+        const ref = ov(g.r1 + 1, own(g, g.r1)) || ov(g.r0 - 1, own(g, g.r0)), wRef = ref ? ref[2] - ref[1] : 3 * sw0;
+        for (const r of rs) {
+          const n = own(g, r), far = farOf(r, n), dl = n[2] - n[1] - wRef;
+          if (dl <= 0) continue;
+          const lo = dir > 0 ? n[2] : far ? far[2] : -Infinity, hi = dir > 0 ? (far ? far[1] : Infinity) : n[1];
+          for (const p of rows.get(r)) if (p.s > lo && p.s < hi) p.s -= dir * dl;
+          for (const s of [...cand, ...st.stairs[key], ...wide]) if (s[0] === r && s[1] >= lo && s[2] <= hi) { s[1] -= dir * dl; s[2] -= dir * dl; }
+          if (dir > 0) n[2] -= dl; else n[1] += dl;
+          cand.splice(cand.indexOf(n), 1); st.stairs[key].push(n);
+          if (!far) continue;
+          if (dir > 0) far[1] -= dl; else far[2] += dl;
+          const i = st.stairs[key].indexOf(far);
+          if (i >= 0) { st.stairs[key].splice(i, 1); cand.push(far); }
+        }
+      }
+      cand.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+      groups = grouped();
     }
     // (the lower corner tiers have none: their gaps are the open steps by the diagonal entrance stair)
     const tierMid = t.o0 + t.rows * t.d / 2, sw = [...ws].sort((a, b) => a - b)[ws.length >> 1] || 0.45;   // (a seat's width)
@@ -1638,9 +1676,8 @@ for (const st of STANDS) {
     });
   } else {
     // goal-end stands: the vaulted roof hung on stays from leaning blue columns along the outer facade
-    // the goal-end roof runs on past the stand ends, under the higher side-stand roofs that overlap it
-    // (not at G's pavilion end, where the main stand's roof stops short)
-    const ge0 = st.id === 'G' ? 0.5 : 8, ge1 = 8;
+    // the goal-end roof ends where the seats do, just past the stand's ends
+    const ge0 = 0.5, ge1 = 0.5;
     const roof = vaultRoof(st, -ge0, L + ge1, -1.5, B + 1.2, R - 0.35);
     roof.renderOrder = 1;
     st.roofMeshes = [roof];
