@@ -3281,6 +3281,10 @@ const match = (() => {
   const KITS = {
     home: { shirt: m(0xd81e36), shorts: m(0xffffff), socks: m(0xffffff), name: 'Wisła' },
     away: { shirt: m(0xf4f4f4), shorts: m(0x111114), socks: m(0x111114), name: 'Goście' },
+    // the keepers stand out from both teams: Wisła's in yellow, the visitors' in pink; the officials all in black
+    homeGK: { shirt: m(0xf2c81e), shorts: m(0xe2b410), socks: m(0xf2c81e) },
+    awayGK: { shirt: m(0xf27ab4), shorts: m(0xe0609e), socks: m(0xf27ab4) },
+    ref: { shirt: m(0x15161a), shorts: m(0x15161a), socks: m(0x15161a) },
   };
   const skin = m(0xe0ac8a), shoe = m(0x15151a);
   // hair as on the fans: mostly near-black, some brown, a few blond
@@ -3308,11 +3312,32 @@ const match = (() => {
   for (const team of ['home', 'away']) {
     const dir = team === 'home' ? 1 : -1;
     FORM.forEach(([ax, az], i) => {
-      const mesh = makePlayer(KITS[team]); root.add(mesh.g);
+      const mesh = makePlayer(KITS[i === 0 ? team + 'GK' : team]); root.add(mesh.g);
       players.push({ ...mesh, team, dir, idx: i, gk: i === 0, bx: dir * ax * (HX - 3), bz: dir * az * (HZ - 4),
         x: 0, z: 0, vx: 0, vz: 0, face: dir > 0 ? Math.PI / 2 : -Math.PI / 2, ph: Math.random() * 6, cel: 0 });
     });
   }
+  // match officials: the referee keeps some 10 m from the ball, off to its side; the two assistants run the
+  // touchlines just outside them, each over one half (diagonal system), level with the last defender or the ball,
+  // a flag (red and yellow quarters) in the right hand, raised when the ball goes out over their goal line
+  const flagTex = canvasTex(32, 32, (g, w, h) => {
+    g.fillStyle = '#e8d21c'; g.fillRect(0, 0, w, h); g.fillStyle = '#d42a26'; g.fillRect(0, 0, w / 2, h / 2); g.fillRect(w / 2, h / 2, w / 2, h / 2);
+  }, false);
+  const flagStick = new THREE.CylinderGeometry(0.012, 0.012, 0.55, 6).rotateX(Math.PI / 2).translate(0, 0, 0.2);
+  const flagCloth = new THREE.BoxGeometry(0.01, 0.3, 0.36).translate(0, 0.15, 0.3);
+  const flagMats = [m(0x2a2a2a), new THREE.MeshStandardMaterial({ map: flagTex, roughness: 0.8, side: THREE.DoubleSide })];
+  const officials = [];
+  const official = (role, side) => {
+    const o = { ...makePlayer(KITS.ref), role, side, x: 0, z: role === 'ref' ? -9 : side * (HZ + 1.2), vx: 0, vz: 0, face: 0, ph: Math.random() * 6, cel: 0, flagUp: 0 };
+    if (role === 'ar') {
+      const f = new THREE.Group(); f.position.set(0, -0.53, 0.04);
+      f.add(new THREE.Mesh(flagStick, flagMats[0]), new THREE.Mesh(flagCloth, flagMats[1]));
+      o.armR.add(f);
+    }
+    root.add(o.g); officials.push(o); return o;
+  };
+  official('ref', 0); official('ar', -1); official('ar', 1);
+
   const ball = new THREE.Mesh(new THREE.SphereGeometry(R_BALL, 16, 12), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }));
   ball.castShadow = true; root.add(ball);
 
@@ -3337,6 +3362,7 @@ const match = (() => {
 
   function reset(team) {
     for (const p of players) { p.x = p.bx * 0.98; p.z = p.bz; p.vx = p.vz = 0; p.cel = 0; if (p.team !== team && !p.gk) { /* stays in its half */ } }
+    for (const o of officials) { o.x = o.role === 'ref' ? 4 : o.side * HX * 0.3; o.z = o.role === 'ref' ? -9 : o.side * (HZ + 1.2); o.vx = o.vz = 0; o.flagUp = 0; }
     const striker = players.find(p => p.team === team && p.idx === 9);
     striker.x = -striker.dir * 0.6; striker.z = 0;
     carrier = striker; flight = null; loose = null; hold = 1.2; pause = 1.6;
@@ -3380,6 +3406,18 @@ const match = (() => {
     p.x += p.vx * dt; p.z += p.vz * dt;
   }
 
+  // look where it runs (or at the ball when standing; an assistant always faces the pitch), legs and arms swinging
+  function animate(p, dt, sideStep = false) {
+    const speed = Math.hypot(p.vx, p.vz), want = sideStep ? (p.side > 0 ? Math.PI : 0) : speed > 0.6 ? Math.atan2(p.vx, p.vz) : Math.atan2(bp.x - p.x, bp.z - p.z);
+    let da = want - p.face; da = Math.atan2(Math.sin(da), Math.cos(da)); p.face += da * Math.min(1, dt * 8);
+    p.ph += dt * (2 + speed * 1.7); const sw = Math.sin(p.ph) * Math.min(0.9, speed * 0.17);
+    if (sideStep) { p.legL.rotation.set(0, 0, Math.abs(sw) * 0.5); p.legR.rotation.set(0, 0, -Math.abs(sw) * 0.5); }
+    else { p.legL.rotation.x = sw; p.legR.rotation.x = -sw; }
+    const up = p.cel > 0.4;   // arms in the air after a goal
+    p.armL.rotation.x = up ? -2.7 : -sw * 0.8; p.armR.rotation.x = up || p.flagUp > 0 ? -2.9 : sideStep ? -0.25 : sw * 0.8;
+    p.g.position.set(p.x, up ? Math.abs(Math.sin(clock * 0.6)) * 0.18 : 0, p.z); p.body.rotation.y = p.face;
+  }
+
   function tick(dt) {
     if (!on) return;
     if (!over) clock += dt * SIM_SPEED;
@@ -3406,7 +3444,7 @@ const match = (() => {
           for (const q of mates(flight.from)) q.cel = 3; flight.from.cel = 3.5;
           kickoffTeam = flight.from.team === 'home' ? 'away' : 'home'; pause = 3.4; flight = null; loose = 'goal';
         } else if (flight.out === 'save') { sfx('ooh', 0.7); takeBall(flight.gk); hold = 1.4; }
-        else { sfx('ooh', 0.5); const gk = players.find(q => q.gk && q.team !== flight.from.team); takeBall(gk); hold = 1.4; bp.x = gk.x; bp.z = gk.z; }
+        else { sfx('ooh', 0.5); officials.filter(o => o.role === 'ar').sort((a, b) => dist(a, bp) - dist(b, bp))[0].flagUp = 2.2; const gk = players.find(q => q.gk && q.team !== flight.from.team); takeBall(gk); hold = 1.4; bp.x = gk.x; bp.z = gk.z; }
       }
     } else if (carrier) {
       bp.x = carrier.x + Math.sin(carrier.face) * 0.55; bp.z = carrier.z + Math.cos(carrier.face) * 0.55; bp.y = R_BALL + Math.abs(Math.sin(clock * 0.9)) * 0.03;
@@ -3439,14 +3477,24 @@ const match = (() => {
       }
       steer(p, tx, tz, sp, dt);
       if (p.cel > 0) p.cel -= dt;
-      // look where it runs (or at the ball when standing)
-      const speed = Math.hypot(p.vx, p.vz), want = speed > 0.6 ? Math.atan2(p.vx, p.vz) : Math.atan2(bp.x - p.x, bp.z - p.z);
-      let da = want - p.face; da = Math.atan2(Math.sin(da), Math.cos(da)); p.face += da * Math.min(1, dt * 8);
-      p.ph += dt * (2 + speed * 1.7); const sw = Math.sin(p.ph) * Math.min(0.9, speed * 0.17);
-      p.legL.rotation.x = sw; p.legR.rotation.x = -sw;
-      const up = p.cel > 0.4;   // arms in the air after a goal
-      p.armL.rotation.x = up ? -2.7 : -sw * 0.8; p.armR.rotation.x = up ? -2.7 : sw * 0.8;
-      p.g.position.set(p.x, up ? Math.abs(Math.sin(clock * 0.6)) * 0.18 : 0, p.z); p.body.rotation.y = p.face;
+      animate(p, dt);
+    }
+    // the officials: the referee 10 m from the ball towards the middle of the pitch, the assistants level with the
+    // second-last defender (or the ball, if it is nearer the goal line) in their own half, side-stepping along
+    // the line facing the pitch
+    for (const o of officials) {
+      let tx, tz, sp = 5;
+      if (o.role === 'ref') {
+        const sz = bp.z > 0 ? -1 : 1; tx = bp.x * 0.85 - Math.sign(bp.x || 1) * 3; tz = bp.z + sz * 9;
+        [tx, tz] = clampPitch(tx, tz);
+      } else {
+        const half = o.side, def = players.filter(q => !q.gk && Math.sign(q.dir) === -half).map(q => q.x * half);
+        const line = Math.max(def.length ? Math.max(...def) : 0, bp.x * half);
+        tx = half * THREE.MathUtils.clamp(line, 0, HX); tz = o.side * (HZ + 1.2); sp = 6;
+      }
+      steer(o, tx, tz, sp, dt);
+      if (o.flagUp > 0) o.flagUp -= dt;
+      animate(o, dt, o.role === 'ar');
     }
     ball.position.set(bp.x, bp.y, bp.z);
   }
@@ -3458,7 +3506,7 @@ const match = (() => {
   }
   function stop() { on = false; root.visible = false; $('score').hidden = true; el.ambient.pause(); }
   return { tick, start, stop, get on() { return on; },
-    debug: () => ({ clock: Math.round(clock), score: { ...score }, carrier: carrier ? carrier.team + '#' + carrier.idx : null, flight: flight ? flight.kind : null, ball: [+bp.x.toFixed(1), +bp.z.toFixed(1)], players: players.map(p => [+p.x.toFixed(1), +p.z.toFixed(1)]) }) };
+    debug: () => ({ clock: Math.round(clock), score: { ...score }, carrier: carrier ? carrier.team + '#' + carrier.idx : null, flight: flight ? flight.kind : null, ball: [+bp.x.toFixed(1), +bp.z.toFixed(1)], players: players.map(p => [+p.x.toFixed(1), +p.z.toFixed(1)]), officials: officials.map(o => [+o.x.toFixed(1), +o.z.toFixed(1)]) }) };
 })();
 toggle('btnMatch', on => { $('btnMatch').textContent = on ? 'Wyłącz mecz' : 'Włącz mecz'; on ? match.start() : match.stop(); });
 
