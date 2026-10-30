@@ -15,12 +15,21 @@ Otwórz `stadion-wisla/index.html` w przeglądarce. To samodzielna kopia z wbudo
   node stadion-wisla/build.mjs
   ```
 
+- `stadion-wisla/data/` – plan miejsc klubu (`seats.json`, `sectors.json`) ze strony stadium.wislakrakow.com.
+- `stadion-wisla/tools/seatmap.mjs` – zamienia plan miejsc na zwarty układ krzesełek i wpisuje go do `stadion.html` (blok `SEATMAP`):
+
+  ```bash
+  node stadion-wisla/tools/seatmap.mjs
+  ```
+
 - `stadion-wisla/tex/` – tekstury (murawa 4K, beton, elewacja, poszycie dachu, park, krzesełko).
 - `stadion-wisla/herb.svg` – herb klubu.
 
 ## Model
 
 - Trybuny A (z H), C, E, G i narożniki B, D, F; pawilon medialny w narożniku H.
-- Liczby rzędów jak na stadionie: G i C po 32, poziomy dolne 18, górne: A/H 21, E 25, narożniki B/D/F 24.
-- Model buduje 32 186 miejsc (bez 118 stanowisk trybuny prasowej); przy każdym wyjściu po 2 miejsca z boku zostają wolne na przejście. Rząd na trybunie E ma 253 miejsca (dół: E11 1–47, E12 48–96, …), H11 ma 47 w rzędzie, numeracja w rzędzie biegnie dalej przez sektory (E, G, C, narożniki). Sektory E i H11 są policzone z długości rzędów, więc mają więcej miejsc niż w systemie biletowym; G, C oraz ADM i A11 mieszczą mniej; pozostałe sektory zgadzają się z systemem biletowym.
+- Każde krzesełko trybun pochodzi z planu miejsc klubu: 32 320 miejsc w 51 sektorach, z prawdziwymi rzędami i numerami. Razem ze skyboxami, balkonami, lożą prezydencką i miejscami dla mediów plan ma 33 499 miejsc; te 1 179 model pokazuje bez numerów, a trybuna prasowa ma 241 stanowisk.
+- Liczby rzędów jak w planie: G 32, C 33, poziomy dolne 18 (narożniki D i F 22), górne: A/H 21, E 25, narożniki B/D/F 25.
+- Schody, wyjścia, tunel dla piłkarzy i trybuna prasowa są tam, gdzie plan zostawia przerwy w rzędach: 2–5 brakujących miejsc to schody, większa przerwa przez co najmniej trzy rzędy to wyjście.
+- Plan jest schematyczny. Na prostych trybunach siatka miejsc jest rozciągnięta na długość trybuny, więc na G i C (67 m) krzesełka są węższe. W narożnikach każde miejsce zachowuje swoje położenie w szerokości wachlarza.
 - Symulator zajętości: suwak „Zajętość” zapełnia stadion od środków trybun, narożniki na końcu.
