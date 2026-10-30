@@ -2193,6 +2193,19 @@ function exitGateSign(name) {
         plane(st, m, sw, oG - 0.05, yT - 0.24, sw * 0.27, exitGateSign(near ? near.name : ''));
       }
       if (rm.length) { const ms = []; for (const [p, q] of rm) member(ms, p, q, 0.04); instancedMembers(ms, steelBlue, false); }
+      // behind the goals a glass railing runs along the front of the first row, open only at the gates
+      if (key === 'single' && front.length) {
+        const ss = front.map(p => p.s), oF = t.o0 + 0.06, rf = [];
+        const s0 = Math.max(0.03, Math.min(...ss) - 0.6), s1 = Math.min(st.len - 0.03, Math.max(...ss) + 0.6);
+        const cuts = [...spans].sort((p, q) => p[0] - q[0]);
+        let a = s0;
+        for (const [g0, g1] of [...cuts, [s1, s1]]) {
+          const b = Math.min(g0 - 0.02, s1);
+          if (b - a > 0.3) { const n = Math.ceil((b - a) / 1.5); rail(rf, Array.from({ length: n + 1 }, (_, i) => W(st, a + (b - a) * i / n, oF, t.y0))); }
+          a = Math.max(a, g1 + 0.02);
+        }
+        instancedMembers(rf, steelBlue, false);
+      }
     }
   }
 }
