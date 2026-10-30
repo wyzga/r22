@@ -2159,17 +2159,17 @@ const PATTERN = {
 // lower (blue) · 1 · 9 · (red) · 0 · 6 · (blue); upper (blue) · W · I · S · Ł · A · (blue).
 // [colour, character, width of the character in the block]; the blocks' u ranges are set from the stairs below
 const E_LAYOUT = {
-  lower: [[COL.blue], [COL.red, '1', 0.5], [COL.blue, '9', 0.62], [COL.red], [COL.blue, '0', 0.54], [COL.red, '6', 0.54], [COL.blue]],
-  upper: [[COL.blue], [COL.blue, 'W', 0.58], [COL.pink, 'I', 0.1], [COL.blue, 'S', 0.4], [COL.pink, 'Ł', 0.54], [COL.blue, 'A', 0.58], [COL.blue]],
+  lower: [[COL.blue], [COL.red, '1', 0.36], [COL.blue, '9', 0.43], [COL.red], [COL.blue, '0', 0.38], [COL.red, '6', 0.38], [COL.blue]],
+  upper: [[COL.blue], [COL.blue, 'W', 0.44], [COL.pink, 'I', 0.1], [COL.blue, 'S', 0.29], [COL.pink, 'Ł', 0.38], [COL.blue, 'A', 0.4], [COL.blue]],
 };
-// The characters are upright line drawings in white seats: square-cut strokes with rounded corners, a constant
-// ~1.4 m wide (about three seats). Strokes are polylines in a unit box (x right, y up = towards the back).
+// The characters are upright line drawings in white seats: square-cut strokes with rounded corners (the A's legs
+// meet in a round arch at the top), a constant ~1.4 m wide (about three seats). Strokes are polylines in a unit box (x right, y up = towards the back).
 const GLYPHS = {
   W: [[[0, 1], [0, 0], [0.5, 0.6], [1, 0], [1, 1]]],   // straight, parallel outer strokes and a peak in the middle
   I: [[[0.5, 1], [0.5, 0]]],
   S: [[[1, 0.86], [0.86, 1], [0.14, 1], [0, 0.86], [0, 0.64], [0.14, 0.52], [0.86, 0.52], [1, 0.4], [1, 0.14], [0.86, 0], [0.14, 0], [0, 0.14]]],
   'Ł': [[[0.22, 1], [0.22, 0], [1, 0]], [[0, 0.32], [0.5, 0.64]]],
-  A: [[[0, 0], [0.5, 1], [1, 0]], [[0.26, 0.4], [0.74, 0.4]]],
+  A: [[[0, 0], [0.260, 0.760], [0.278, 0.852], [0.330, 0.930], [0.408, 0.982], [0.500, 1.000], [0.592, 0.982], [0.670, 0.930], [0.722, 0.852], [0.740, 0.760], [1, 0]], [[0.16, 0.4], [0.84, 0.4]]],
   '1': [[[0.3, 0.8], [0.72, 1], [0.72, 0]]],
   '9': [[[1, 0.52], [0.14, 0.52], [0, 0.64], [0, 0.86], [0.14, 1], [0.86, 1], [1, 0.86], [1, 0.14], [0.86, 0], [0.1, 0]]],
   '0': [[[0.14, 0], [0.86, 0], [1, 0.14], [1, 0.86], [0.86, 1], [0.14, 1], [0, 0.86], [0, 0.14], [0.14, 0]]],
