@@ -1316,6 +1316,13 @@ for (const st of STANDS) {
         member(rm, pts[i].clone().setY(pts[i].y + 1.0), pts[i + 1].clone().setY(pts[i + 1].y + 1.0), 0.05);
         if (i % 2 === 0) member(rm, pts[i], pts[i].clone().setY(pts[i].y + 1.0), 0.05);
       }
+      // and the upper tier's open end at edgeU, beside the goal-end stand, the same way
+      const up = [];
+      for (let r = 0; r <= T.upper.rows; r++) {
+        const t = T.upper, o = t.o0 + r * t.d;
+        up.push(W(st, st.edgeU(o) + inw, o, t.y0 + Math.min(r, t.rows - 1) * t.r));
+      }
+      rail(rm, up);
       instancedMembers(rm, steelBlue, false);
     }
     // a profile of the upper structure swept over the corner up to edgeU, with the passage left out below PH
@@ -1976,6 +1983,22 @@ function seatColor(st, key, name, s, r) {
   if (inStar(x, y)) return COL.white;
   return r > t.rows * 0.55 ? COL.red : COL.pink;   // the lower rows are sun-faded
 }
+// the evacuation exit sign over a descent to the pitch: teal, white lettering, the sector in a box
+const gateSigns = new Map();
+function exitGateSign(name) {
+  if (!gateSigns.has(name)) {
+    const tex = canvasTex(512, 138, (g, w, h) => {
+      g.fillStyle = '#17707c'; g.fillRect(0, 0, w, h);
+      g.strokeStyle = '#e8eef0'; g.lineWidth = 5; g.strokeRect(8, 8, w - 16, h - 16);
+      g.fillStyle = '#fff'; g.textBaseline = 'middle'; g.textAlign = 'center';
+      g.font = '600 34px "Inter Tight", Arial, sans-serif';
+      g.fillText('WYJŚCIE', 165, h / 2 - 22); g.fillText('EWAKUACYJNE', 165, h / 2 + 22);
+      if (name) { g.strokeRect(338, 26, 152, h - 52); g.font = '700 ' + (name.length > 4 ? 30 : 52) + 'px "Inter Tight", Arial, sans-serif'; g.fillText(name.length > 8 ? name.slice(0, 8) : name, 414, h / 2 + 2); }
+    }, false);
+    gateSigns.set(name, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5 }));
+  }
+  return gateSigns.get(name);
+}
 // Stairs and exits from the plan's gaps. The stair treads are light concrete (yellow on stand G, but for the grey
 // concrete stair between the away sector and the home end), one slab on
 // each row a stair crosses, merged into one mesh per stand. Exits as photographed (E13): the recess cut into the
@@ -2029,11 +2052,6 @@ function seatColor(st, key, name, s, r) {
       const t = st.tiers[key], rails = [];
       for (const { c, h, rows: [v0, v1], down } of list) {
         const oB = t.o0 + (v1 + 1) * t.d, yA = t.y0 + v0 * t.r, yT = t.y0 + Math.min(v1 + 1, t.rows - 1) * t.r;
-        // (a corner's exit: its stair goes on down through the front rows, then by steps in front of them to the pitch)
-        if (down) {
-          const n = 3, sd = 0.32, m = c(t.o0);
-          for (let k = 0; k < n; k++) boxL(st, m - h, m + h, t.o0 - (k + 1) * sd, t.o0 - k * sd, 0, t.y0 * (n - k) / (n + 1), stairMat);
-        }
         const dH = Math.max(1.6, Math.min(2.2, yT - yA - 0.35)), dW = Math.min(2.0, 2 * h - 0.4), sb = c(oB);
         // doors: dark glass in a light frame, split in two leaves
         plane(st, sb, dW, oB - 0.02, yA + dH / 2, dH, doorGlassMat);
@@ -2059,6 +2077,35 @@ function seatColor(st, key, name, s, r) {
       }
       const rm = []; for (const [p, q] of rails) member(rm, p, q, 0.05);
       if (rm.length) instancedMembers(rm, steelBlue, false);
+    }
+    // descents to the pitch, as photographed at E14: where a stair of the front tier (or a corner exit's stair)
+    // reaches the front row, steps go on down in front of the wall to the walkway, railed either side, under a
+    // yellow gate frame with a low bar across and an "evacuation exit" sign naming the sector
+    for (const key of ['lower', 'single']) {
+      const t = st.tiers[key];
+      if (!t) continue;
+      const spans = st.fan ? st.exits[key].filter(e => e.down).map(e => [e.c(t.o0) - e.h, e.c(t.o0) + e.h])
+        : st.stairs[key].filter(g => g[0] === 0 && g[2] - g[1] >= 1.0).map(([, a, b]) => [a, b]);
+      const front = st.placed[key].filter(p => p.r === 0), rm = [];
+      for (const [a, b] of spans) {
+        const n = 4, sd = 0.3, m = (a + b) / 2, y0 = t.y0;
+        for (let k = 0; k < n; k++) boxL(st, a, b, t.o0 - (k + 1) * sd, t.o0 - k * sd, 0, y0 * (n - k) / (n + 1), stairMat);
+        for (const e of [a, b]) {
+          const p = [W(st, e, t.o0 - n * sd, 0), W(st, e, t.o0 - 0.05, y0 * n / (n + 1)), W(st, e, t.o0 + 0.3, y0)];
+          for (let i = 0; i < 2; i++) rm.push([p[i].clone().setY(p[i].y + 0.95), p[i + 1].clone().setY(p[i + 1].y + 0.95)]);
+          for (const q of p) rm.push([q, q.clone().setY(q.y + 0.95)]);
+          rm.push([p[0].clone().setY(0.45), p[1].clone().setY(p[1].y + 0.45)]);
+        }
+        // the gate: posts at the stair's sides on the front row, a top bar carrying the sign, a low bar across
+        const oG = t.o0 + 0.12, yT = y0 + 2.0;
+        for (const e of [a + 0.04, b - 0.04]) boxL(st, e - 0.04, e + 0.04, oG - 0.04, oG + 0.04, y0, yT, yellow);
+        boxL(st, a, b, oG - 0.04, oG + 0.04, yT - 0.08, yT, yellow);
+        boxL(st, a + 0.08, b - 0.08, oG - 0.025, oG + 0.025, y0 + 0.88, y0 + 0.94, yellow);
+        const near = front.reduce((q, p) => !q || Math.abs(p.s - m) < Math.abs(q.s - m) ? p : q, null);
+        const sw = Math.min(1.1, b - a - 0.16);
+        plane(st, m, sw, oG - 0.05, yT - 0.26, sw * 0.27, exitGateSign(near ? near.name : ''));
+      }
+      if (rm.length) { const ms = []; for (const [p, q] of rm) member(ms, p, q, 0.04); instancedMembers(ms, steelBlue, false); }
     }
   }
 }
