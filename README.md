@@ -48,4 +48,6 @@ Otwórz `stadion-wisla/index.html` w przeglądarce. To samodzielna kopia z wbudo
 - Etykiety sektorów wyglądają jak tablice na stadionie (zdjęcie E14): litera trybuny biała na czerwonym polu, numer biały na niebieskim. Sektory z nazwą (VIP, prasa) mają jedno niebieskie pole.
 - Przycisk „Noc” przełącza na widok nocny: ciemne niebo i włączone reflektory. Głowice na 10 masztach świecą i każda rzuca snop światła na murawę. Pod dachami, nad ostatnimi rzędami, świecą lampy (co ok. 6 m), więc górne części trybun też są widoczne. Światło jest ciepłobiałe, a murawa zostaje zielona.
 - Na środku C i G, na samej górze, nie ma wyjścia, tylko stanowisko kamery: płaski podest z barierką z przodu i po bokach, bez drzwi.
-- Symulator zajętości: suwak „Zajętość” zapełnia stadion od środków trybun, narożniki na końcu.
+- Przed trybunami za bramkami (C i G) wisi na całej ich szerokości siatka za bramką, wysoka na 2,5 wysokości bramki (6,1 m), z tej samej siatki co bramki, rozpięta między cienkimi ciemnymi słupkami co ok. 12 m.
+- Symulator zajętości: suwak „Zajętość” zapełnia stadion od środków trybun, narożniki na końcu. Każdy kibic ma głowę w kolorze skóry i czarne włosy. Na C (trybuna gospodarzy) 9 na 10 kibiców jest ubranych na czerwono, a co jakiś czas kibice podnoszą tam duże flagi w poziome pasy czerwony–biały–niebieski–biały–czerwony i machają nimi na boki, jak na zdjęciu.
+- Żadne dwie ściany modelu nie leżą w tej samej płaszczyźnie (schody, cokoły, budynki za trybunami są odsunięte o 1–2 cm), więc przy ruchu kamery powierzchnie nie migoczą.

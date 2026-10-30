@@ -191,12 +191,6 @@
     select { max-width: 160px; }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
-  .score { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; align-items: baseline; gap: 10px; padding: 8px 16px; background: rgba(16, 24, 32, 0.86); color: #fff; border-radius: var(--radius); border-top: 2px solid var(--red); font: 600 15px var(--sans); pointer-events: none; white-space: nowrap; }
-  .score[hidden] { display: none; }
-  .score b { font-size: 24px; font-variant-numeric: tabular-nums; }
-  .score i { font-style: normal; opacity: .6; }
-  .score em { font-style: normal; font-size: 13px; opacity: .75; min-width: 46px; text-align: right; }
-  .score .sn { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; }
 </style>
 
 <canvas id="scene" tabindex="0" aria-label="Model 3D Synerise Arena Kraków – kliknij krzesełko, aby zobaczyć widok z tego miejsca"></canvas>
@@ -280,11 +274,9 @@
     <label class="occ" for="occ"><span>Zajętość</span><input type="range" id="occ" min="0" max="100" value="0" aria-describedby="occOut"><output id="occOut" for="occ">0%</output></label>
     <button class="btn" id="tLabels" aria-pressed="true">Etykiety sektorów</button>
     <button class="btn" id="tNight" aria-pressed="false">Noc</button>
-    <button class="btn" id="btnMatch" aria-pressed="false">Włącz mecz</button>
   </nav>
 </div>
 
-<div class="score" id="score" hidden aria-live="polite"><span class="sn">Wisła</span><b id="sH">0</b><i>:</i><b id="sA">0</b><span class="sn">Goście</span><em id="sT">0'</em></div>
 <div class="tip" id="tip" hidden></div>
 <script>if (window.__ASSETS && window.__ASSETS['herb.svg']) { document.getElementById('crestImg').src = window.__ASSETS['herb.svg']; document.getElementById('favicon').href = window.__ASSETS['herb.svg']; }</script>
 <div class="loading" id="loading">Wczytywanie stadionu…</div>
@@ -1097,6 +1089,7 @@ const grassTex = canvasTex(GX * PPM, GZ * PPM, (g, w, h) => {
 const PITS = [];   // sunken dugouts: world rectangles cut out of the turf (see carvePits)
 const grass = add(new THREE.Mesh(new THREE.PlaneGeometry(GX, GZ).rotateX(-Math.PI / 2),
   TX_GRASS ? texMat(TX_GRASS, 3, { color: 0xc6d8bc, roughness: 0.95 }) : new THREE.MeshStandardMaterial({ color: 0x327a35, roughness: 0.95 })));
+grass.position.y = -0.01;   // (under the corners' ground-level concrete, so the two do not flicker against each other)
 const marks = add(new THREE.Mesh(new THREE.PlaneGeometry(GX, GZ).rotateX(-Math.PI / 2),
   new THREE.MeshStandardMaterial({ map: grassTex, transparent: true, depthWrite: false, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 })));
 marks.position.y = 0.01;
@@ -1454,7 +1447,7 @@ for (const st of STANDS) {
     const [g, sd] = st.endS0 ? [0, 1] : [1, 0], zB = st.sz * (41.5 + st.sideBack), xB = st.sx * (61.5 + st.endBack);
     // (up to where the corner building ends, leaving the gap beside the goal-end stand open)
     const sEnd = near(ob), pEnd = W(st, sEnd, ob, 0), inGoalRun = st.endS0 ? sEnd < -TAU * ob : sEnd > st.len + TAU * ob;
-    cornerFill([xz(bends[sd]), [xB, zB], [xB, pEnd.z], xz(pEnd), ...(inGoalRun ? [xz(bends[g])] : [])], fTop);
+    cornerFill([xz(bends[sd]), [xB, zB], [xB, pEnd.z], xz(pEnd), ...(inGoalRun ? [xz(bends[g])] : [])], fTop - 0.01);   // (just under the top of the piece beside it)
     continue;
   }
   // each tier is extruded in pieces: the full profile, cut where an exit opens off a stair (the recess) and,
@@ -1506,9 +1499,21 @@ for (const st of STANDS) {
     const t = T.single, oE = tierEnd(t), top = tierTop(t) + 1.1;
     // (left open below PASS_UNDER behind the ends carried over the passages)
     const v0 = st.voids.find(v => v[0] <= 0), v1 = st.voids.find(v => v[1] >= L - 1e-6), a = v0 ? v0[1] : -0.6, b = v1 ? v1[0] : L + 0.6;
-    boxL(st, a, b, oE, B, 0, top, blackGlass, { cast: true });
-    if (v0) boxL(st, -0.6, a, oE, B, PASS_UNDER, top, blackGlass, { cast: true });
-    if (v1) boxL(st, b, L + 0.6, oE, B, PASS_UNDER, top, blackGlass, { cast: true });
+    // (its face 1 cm behind the tier's back wall, so the two do not flicker against each other)
+    boxL(st, a, b, oE + 0.01, B, 0, top, blackGlass, { cast: true });
+    if (v0) boxL(st, -0.6, a, oE + 0.01, B, PASS_UNDER, top, blackGlass, { cast: true });
+    if (v1) boxL(st, b, L + 0.6, oE + 0.01, B, PASS_UNDER, top, blackGlass, { cast: true });
+    // ball-stop net in front of the stand, across its whole width, 2.5 goal heights (6.1 m) tall: the goal nets'
+    // mesh, hung between thin dark poles about every 12 m
+    {
+      const NH = 2.5 * 2.44, oN = -2, net = netMat.clone();
+      net.map = netTex.clone(); net.map.repeat.set(L / 0.12, NH / 0.12); net.map.needsUpdate = true;
+      plane(st, L / 2, L, oN, NH / 2, NH, net);
+      const pm = [], n = Math.round(L / 12);
+      for (let i = 0; i <= n; i++) { const s = 0.1 + (L - 0.2) * i / n; member(pm, W(st, s, oN, 0), W(st, s, oN, NH + 0.05), 0.08); }
+      member(pm, W(st, 0.1, oN, NH), W(st, L - 0.1, oN, NH), 0.02);
+      instancedMembers(pm, new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.6, metalness: 0.3 }), true);
+    }
     // railings along the tier's sides: up its stepped edges, across the cut-back front rows, and down the side of
     // the full rows beside them
     const rm = [];
@@ -1537,7 +1542,7 @@ for (const st of STANDS) {
     const boxRows = BOX_ROWS, boxRowD = BOX_ROW_D;
     const gO = loEnd + 0.35 + boxRows * boxRowD, yF = tierTop(lo);
     const yUnder = o => (up.y0 - 1.4) + (o - up.o0) * ((tierTop(up) - 1.8) - (up.y0 - 1.4)) / (tierEnd(up) - up.o0);
-    boxL(st, 0, L, loEnd, gO, yF - 0.2, yF + 0.45, coreMat);
+    boxL(st, 0, L, loEnd + 0.01, gO, yF - 0.2, yF + 0.45, coreMat);   // (just behind the tier's parapet face)
     for (let i = 1; i < boxRows; i++) boxL(st, 0, L, loEnd + 0.35 + i * boxRowD, gO, yF + 0.45, yF + 0.45 + i * 0.2, coreMat);
     standMeshes.push(boxL(st, 0, L, gO, gO + 0.15, yF, yUnder(gO) + 0.1, skyGlass));
     boxL(st, 0, L, gO + 0.15, upEnd, 0, under, coreMat);
@@ -2119,10 +2124,13 @@ function exitGateSign(name) {
         for (let i = 0; i + 1 < cuts.length; i++) {
           const n = Math.max(1, Math.ceil((cuts[i + 1] - cuts[i]) / 2)), w = (cuts[i + 1] - cuts[i]) / n;
           for (let j = 0; j < n; j++) {
-            const s0 = cuts[i] + j * w, sm = s0 + w / 2, y = tierY(st, t, r, sm, rowDepth(t, r)) + 0.02;
-            const g = new THREE.BoxGeometry(w, t.r, t.d);
+            // (2 cm proud of the concrete riser and 1 cm in from the stair's own ends, so no face of it lies in the
+            // plane of a concrete one, where the two would flicker against each other)
+            const e0 = i === 0 && j === 0 ? 0.01 : 0, e1 = i + 2 === cuts.length && j === n - 1 ? 0.01 : 0;
+            const s0 = cuts[i] + j * w + e0, ww = w - e0 - e1, sm = s0 + ww / 2, y = tierY(st, t, r, sm, rowDepth(t, r)) + 0.02;
+            const g = new THREE.BoxGeometry(ww, t.r, t.d + 0.02);
             g.applyQuaternion(frameAt(st, sm, oM).q);
-            const p = W(st, sm, oM, y - t.r / 2);
+            const p = W(st, sm, oM - 0.01, y - t.r / 2);
             (away ? plain : treads).push(g.translate(p.x, p.y, p.z));
           }
         }
@@ -2251,7 +2259,7 @@ function pressSeats(st) {
     const n = Math.floor(PRESS_SEATS / nRows) + (i < PRESS_SEATS % nRows ? 1 : 0);
     for (let j = 0; j < n; j++) list.push({ name: 'PRASA', row: r + 1, num: j + 1, r, o: rowDepth(t, r), s: s1 - (j + 0.5) * (s1 - s0) / n });
   }
-  if (P.bay) boxL(st, P.bay[0], P.bay[1], t.o0 + P.start * t.d, t.o0 + P.desks * t.d, t.y0 + P.start * t.r - 0.3, t.y0 + (P.desks - 1) * t.r + 0.1, coreMat, { cast: true });
+  if (P.bay) boxL(st, P.bay[0], P.bay[1], t.o0 + P.start * t.d + 0.01, t.o0 + P.desks * t.d, t.y0 + P.start * t.r - 0.3, t.y0 + (P.desks - 1) * t.r + 0.1, coreMat, { cast: true });
   return list;
 }
 
@@ -2301,7 +2309,17 @@ const fanIndex = new Map();
 const fans = (() => {
   const torso = new THREE.BoxGeometry(0.42, 0.55, 0.26); torso.translate(0, PAN_Y + 0.35, -0.02);
   const head = new THREE.BoxGeometry(0.2, 0.24, 0.22); head.translate(0, PAN_Y + 0.77, -0.02);
-  const geo = mergeGeometries([torso, head]);
+  // black hair: a cap over the top of the head and down the back (the face looks towards the pitch, +z)
+  const cap = new THREE.BoxGeometry(0.22, 0.06, 0.24); cap.translate(0, PAN_Y + 0.91, -0.03);
+  const nape = new THREE.BoxGeometry(0.22, 0.16, 0.04); nape.translate(0, PAN_Y + 0.82, -0.14);
+  // vertex colours: the clothes white (tinted per fan by the instance colour), head and hair fixed (aFix = 1)
+  const paint = (g, hex, fix) => {
+    const c = new THREE.Color(hex), n = g.attributes.position.count;
+    g.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: n }, () => [c.r, c.g, c.b]).flat(), 3));
+    g.setAttribute('aFix', new THREE.Float32BufferAttribute(new Array(n).fill(fix), 1));
+    return g;
+  };
+  const geo = mergeGeometries([paint(torso, 0xffffff, 0), paint(head, 0xe0ac8a, 1), paint(cap, 0x16130f, 1), paint(nape, 0x16130f, 1)]);
   geo.scale(0.85, 0.62, 0.85);   // smaller spectators: head top ~0.6 m above the seat, so they stop hiding the pitch
   const r = rng(1906), list = [], p = new THREE.Vector3();
   for (const sec of sectors) {
@@ -2318,12 +2336,20 @@ const fans = (() => {
     });
   }
   list.sort((a, b) => a[2] - b[2]);
-  const m = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }), list.length);
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, vertexColors: true });
+  mat.onBeforeCompile = sh => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aFix;')
+      .replace('#include <color_vertex>', '#include <color_vertex>\nvColor.xyz = mix(vColor.xyz, color.xyz, aFix);');
+  };
+  const m = new THREE.InstancedMesh(geo, mat, list.length);
   const palette = [0xd81e36, 0xffffff, 0x23468f, 0xd81e36, 0x1c1c22, 0xe2e2e2].map(c => new THREE.Color(c));
+  // the C stand behind the goal is the home end: nine fans in ten there wear red
+  const other = palette.filter(c => c !== palette[0] && c !== palette[3]);
+  const colorOf = sec => sec.st.id !== 'C' ? palette[Math.floor(r() * palette.length)] : r() < 0.9 ? palette[0] : other[Math.floor(r() * other.length)];
   list.forEach(([sec, i], k) => {
     const s = sec.seats[i];
     dummy.position.set(s.x, s.y, s.z); dummy.rotation.set(0, Math.atan2(s.nx, s.nz) + (r() - 0.5) * 0.3, 0); dummy.scale.set(1, 0.92 + r() * 0.16, 1); dummy.updateMatrix();
-    m.setMatrixAt(k, dummy.matrix); m.setColorAt(k, palette[Math.floor(r() * palette.length)]);
+    m.setMatrixAt(k, dummy.matrix); m.setColorAt(k, colorOf(sec));
     fanIndex.set(sec.name + '|' + i, k);
   });
   dummy.scale.set(1, 1, 1);
@@ -2341,6 +2367,57 @@ function hideFanAt(sec, idx) {
   if (k !== undefined) { const m = new THREE.Matrix4(); fans.getMatrixAt(k, m); hiddenFan = { k, m }; fans.setMatrixAt(k, zero); }
   fans.instanceMatrix.needsUpdate = true;
 }
+
+// Flags on C, the home end (as photographed): now and then fans there raise big flags striped across red, white,
+// blue, white, red and wave them, swinging the pole from side to side. A flag shows only while its fan is in the
+// stand (the occupancy slider), for a while, then goes down again.
+const flags = (() => {
+  const r = rng(3812), own = [];
+  for (const sec of sectors) if (sec.st.id === 'C') sec.seats.forEach((s, i) => {
+    if (r() < 0.035) own.push({ k: fanIndex.get(sec.name + '|' + i), ph: r() * 6.3, per: 16 + r() * 20, off: r(), w: 2.4 + r() * 1.2 });
+  });
+  const stripes = canvasTex(8, 128, (g, w, h) => {
+    let y = 0;
+    for (const [c, f] of [['#d81e36', 0.3], ['#ffffff', 0.12], ['#1d3f95', 0.16], ['#ffffff', 0.12], ['#d81e36', 0.3]]) { g.fillStyle = c; g.fillRect(0, y, w, f * h + 1); y += f * h; }
+  }, false);
+  const uTime = { value: 0 };
+  const cloth = new THREE.MeshStandardMaterial({ map: stripes, side: THREE.DoubleSide, roughness: 0.85 });
+  // the cloth ripples, more the further it is from the pole, and droops a little at its free end
+  cloth.onBeforeCompile = sh => {
+    sh.uniforms.uTime = uTime;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;\nattribute float aPhase;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        float fx = transformed.x / 1.8;
+        transformed.z += sin(transformed.x * 4.2 - uTime * 7.0 + aPhase) * 0.16 * fx;
+        transformed.y -= 0.14 * fx * fx;`);
+  };
+  const POLE = 2.7, clothGeo = new THREE.PlaneGeometry(1.8, 1.2, 14, 1).translate(0.9, POLE - 0.6, 0);
+  clothGeo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(new Float32Array(own.map(f => f.ph)), 1));
+  const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.018, 0.018, POLE, 5).translate(0, POLE / 2, 0), new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.6 }), own.length);
+  const cloths = new THREE.InstancedMesh(clothGeo, cloth, own.length);
+  for (const m of [poles, cloths]) { m.frustumCulled = false; m.castShadow = true; scene.add(m); }
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0), base = new THREE.Matrix4(), m = new THREE.Matrix4();
+  const hand = new THREE.Vector3(0.16, PAN_Y + 0.42, 0.08), q = new THREE.Quaternion(), e = new THREE.Euler(0, 0, 0, 'ZYX'), sc = new THREE.Vector3();
+  const ss = THREE.MathUtils.smoothstep;
+  return {
+    tick(now) {
+      const t = reduceMotion ? 0 : now / 1000; uTime.value = t;
+      own.forEach((f, i) => {
+        const cyc = (t / f.per + f.off) % 1, seen = f.k < fans.count && !(hiddenFan && hiddenFan.k === f.k);
+        // up for about 40 % of its cycle: raised and lowered over a second or so
+        const up = !seen ? 0 : reduceMotion ? 1 : ss(cyc, 0, 0.04) * (1 - ss(cyc, 0.38, 0.42));
+        if (up < 0.01) { poles.setMatrixAt(i, zero); cloths.setMatrixAt(i, zero); return; }
+        // the pole swings side to side across the stand; the cloth turns about the pole, trailing the swing
+        const a = t * f.w + f.ph;
+        fans.getMatrixAt(f.k, base);
+        e.set(0, 0.9 * Math.cos(a), 0.6 * Math.sin(a));
+        m.compose(hand, q.setFromEuler(e), sc.set(up, up, up)).premultiply(base);
+        poles.setMatrixAt(i, m); cloths.setMatrixAt(i, m);
+      });
+      poles.instanceMatrix.needsUpdate = cloths.instanceMatrix.needsUpdate = true;
+    },
+  };
+})();
 
 // sector labels, as the signs in the stadium (photographed at E14): the stand's letter white on red, the number
 // white on blue, side by side; a named sector (VIP, press) white on blue
@@ -2960,193 +3037,6 @@ toggle('tNight', setNight);
   if (tile) applyWorldUV(grass, tile);
 })();
 
-// ---------------------------------------------------------------------------
-// Match simulation ("Włącz mecz"): two AI-driven teams of fan-style figures pass the ball about.
-// Watch only, nothing here takes input. Sounds are real recordings in audio/ (generated once with
-// ElevenLabs sound effects); with no audio files the match still runs, silently.
-// ---------------------------------------------------------------------------
-const match = (() => {
-  const HX = PL / 2, HZ = PW / 2, R_BALL = 0.14, SIM_SPEED = 15;   // 15 match minutes per real minute: 90' = 6 min
-  const root = new THREE.Group(); root.visible = false; scene.add(root);
-  const m = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 });
-  const KITS = {
-    home: { shirt: m(0xd81e36), shorts: m(0xffffff), socks: m(0xffffff), name: 'Wisła' },
-    away: { shirt: m(0xf4f4f4), shorts: m(0x111114), socks: m(0x111114), name: 'Goście' },
-  };
-  const skin = m(0xd9a27e), shoe = m(0x15151a);
-  const gTorso = new THREE.BoxGeometry(0.42, 0.55, 0.26), gShorts = new THREE.BoxGeometry(0.4, 0.26, 0.25), gHead = new THREE.BoxGeometry(0.2, 0.24, 0.22);
-  const gSock = new THREE.BoxGeometry(0.15, 0.58, 0.16), gShoe = new THREE.BoxGeometry(0.17, 0.1, 0.27);
-  const gSleeve = new THREE.BoxGeometry(0.1, 0.28, 0.12), gForearm = new THREE.BoxGeometry(0.09, 0.26, 0.1);
-  const part = (g, mat, x, y, z, parent) => { const o = new THREE.Mesh(g, mat); o.position.set(x, y, z); parent.add(o); return o; };
-
-  function makePlayer(kit) {
-    const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
-    part(gTorso, kit.shirt, 0, 1.205, 0, body); part(gShorts, kit.shorts, 0, 0.8, 0, body); part(gHead, skin, 0, 1.62, 0, body);
-    const limb = (x, y, add) => { const p = new THREE.Group(); p.position.set(x, y, 0); body.add(p); add(p); return p; };
-    const leg = x => limb(x, 0.8, p => { part(gSock, kit.socks, 0, -0.38, 0, p); part(gShoe, shoe, 0, -0.75, 0.04, p); });
-    const arm = x => limb(x, 1.44, p => { part(gSleeve, kit.shirt, 0, -0.14, 0, p); part(gForearm, skin, 0, -0.41, 0, p); });
-    return { g, body, legL: leg(-0.1), legR: leg(0.1), armL: arm(-0.26), armR: arm(0.26) };
-  }
-
-  // 4-4-2 as (along the attack, across): -1 = own goal line … +1 = the opponent's
-  const FORM = [[-0.92, 0], [-0.58, -0.7], [-0.62, -0.25], [-0.62, 0.25], [-0.58, 0.7], [-0.15, -0.75], [-0.2, -0.25], [-0.2, 0.25], [-0.15, 0.75], [0.25, -0.25], [0.25, 0.25]];
-  const players = [];
-  for (const team of ['home', 'away']) {
-    const dir = team === 'home' ? 1 : -1;
-    FORM.forEach(([ax, az], i) => {
-      const mesh = makePlayer(KITS[team]); root.add(mesh.g);
-      players.push({ ...mesh, team, dir, idx: i, gk: i === 0, bx: dir * ax * (HX - 3), bz: dir * az * (HZ - 4),
-        x: 0, z: 0, vx: 0, vz: 0, face: dir > 0 ? Math.PI / 2 : -Math.PI / 2, ph: Math.random() * 6, cel: 0 });
-    });
-  }
-  const ball = new THREE.Mesh(new THREE.SphereGeometry(R_BALL, 16, 12), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }));
-  ball.castShadow = true; root.add(ball);
-
-  // ---- sound ---------------------------------------------------------------------------------
-  const el = {};
-  for (const n of ['ambient', 'cheer', 'ooh', 'kick1', 'kick2', 'whistle']) { const a = new Audio(ASSET('audio/' + n + '.mp3')); a.preload = 'auto'; el[n] = a; }
-  el.ambient.loop = true;
-  const vol = (x, z) => THREE.MathUtils.clamp(34 / (camera.position.distanceTo(new THREE.Vector3(x, 0, z)) + 10), 0.12, 1);
-  const sfx = (n, v = 1, rate = 1) => { try { const a = el[n].cloneNode(); a.volume = Math.min(1, v); a.playbackRate = rate; a.play().catch(() => {}); } catch { /* no audio */ } };
-  const kick = (x, z) => sfx(Math.random() < 0.5 ? 'kick1' : 'kick2', 0.9 * vol(x, z), 0.9 + Math.random() * 0.25);
-
-  // ---- state ----------------------------------------------------------------------------------
-  let on = false, clock = 0, over = false;
-  const score = { home: 0, away: 0 };
-  let carrier = null, flight = null, pause = 0, hold = 0, loose = null, kickoffTeam = 'home';
-  const bp = { x: 0, y: R_BALL, z: 0 };
-  const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
-  const mates = p => players.filter(q => q.team === p.team);
-  const foes = p => players.filter(q => q.team !== p.team);
-  const goalX = p => p.dir * HX;
-  const clampPitch = (x, z) => [THREE.MathUtils.clamp(x, -HX + 1, HX - 1), THREE.MathUtils.clamp(z, -HZ + 1, HZ - 1)];
-
-  function reset(team) {
-    for (const p of players) { p.x = p.bx * 0.98; p.z = p.bz; p.vx = p.vz = 0; p.cel = 0; if (p.team !== team && !p.gk) { /* stays in its half */ } }
-    const striker = players.find(p => p.team === team && p.idx === 9);
-    striker.x = -striker.dir * 0.6; striker.z = 0;
-    carrier = striker; flight = null; loose = null; hold = 1.2; pause = 1.6;
-    bp.x = striker.x + striker.dir * 0.5; bp.z = 0; bp.y = R_BALL;
-    sfx('whistle', 0.7);
-  }
-
-  function chooseTeammate(p) {
-    const opp = foes(p);
-    const cand = mates(p).filter(q => q !== p && !(q.gk && p.x * p.dir > -HX * 0.6)).map(q => {
-      const d = dist(p, q), open = Math.min(...opp.map(o => dist(o, q))), fwd = (q.x - p.x) * p.dir;
-      const s = fwd * 0.5 + Math.min(open, 9) * 1.4 - Math.abs(d - 16) * 0.35 + (Math.random() - 0.5) * 8 - (d < 5 ? 12 : 0) - (d > 36 ? 20 : 0);
-      return [q, s];
-    }).sort((a, b) => b[1] - a[1]);
-    return cand[Math.floor(Math.random() * Math.min(3, cand.length))][0];
-  }
-
-  function pass(p) {
-    const q = chooseTeammate(p), d = dist(p, q), dur = THREE.MathUtils.clamp(d / 17, 0.45, 1.7);
-    const [tx, tz] = clampPitch(q.x + q.vx * dur, q.z + q.vz * dur);
-    flight = { kind: 'pass', from: p, to: q, x0: bp.x, z0: bp.z, x1: tx, z1: tz, t: 0, dur, h: Math.min(2.8, d / 9) * (Math.random() < 0.3 ? 1.6 : 0.25) };
-    carrier = null; kick(bp.x, bp.z);
-  }
-
-  function shoot(p) {
-    const gk = players.find(q => q.gk && q.team !== p.team), roll = Math.random();
-    const out = roll < 0.2 ? 'goal' : roll < 0.62 ? 'save' : 'wide';
-    const gz = out === 'goal' ? (Math.random() < 0.5 ? -1 : 1) * (1.6 + Math.random() * 1.6) : out === 'save' ? THREE.MathUtils.clamp(gk.z + (Math.random() - 0.5) * 2.4, -3.2, 3.2) : (Math.random() < 0.5 ? -1 : 1) * (4.6 + Math.random() * 3);
-    const gx = goalX(p), d = Math.hypot(gx - bp.x, gz - bp.z);
-    flight = { kind: 'shot', out, from: p, gk, x0: bp.x, z0: bp.z, x1: out === 'save' ? gx - p.dir * 1.4 : gx, z1: gz, t: 0, dur: Math.max(0.35, d / 25), h: out === 'goal' ? 0.6 + Math.random() * 1.2 : out === 'wide' ? 1 + Math.random() * 3 : 0.4 };
-    carrier = null; kick(bp.x, bp.z); sfx('kick2', 0.4 * vol(bp.x, bp.z), 0.8);
-  }
-
-  function takeBall(p) { carrier = p; flight = null; hold = 0.7 + Math.random() * 0.9; }
-
-  // ---- per-frame --------------------------------------------------------------------------------
-  function steer(p, tx, tz, speed, dt) {
-    const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz), v = Math.min(speed, d * 3);
-    const wx = d > 0.05 ? dx / d * v : 0, wz = d > 0.05 ? dz / d * v : 0, k = Math.min(1, dt * 6);
-    p.vx += (wx - p.vx) * k; p.vz += (wz - p.vz) * k;
-    p.x += p.vx * dt; p.z += p.vz * dt;
-  }
-
-  function tick(dt) {
-    if (!on) return;
-    if (!over) clock += dt * SIM_SPEED;
-    if (!over && clock >= 90 * 60) {
-      over = true; sfx('whistle', 0.8); setTimeout(() => sfx('whistle', 0.8), 700); el.ambient.volume = 0.2;
-      const w = score.home === score.away ? 'Remis' : score.home > score.away ? 'Wygrywa Wisła' : 'Wygrywają Goście'; $('sT').textContent = 'Koniec · ' + w;
-    }
-    const mm = Math.min(90, Math.floor(clock / 60)); if (!over) $('sT').textContent = mm + "'";
-    if (pause > 0) pause -= dt;
-
-    // the ball
-    if (flight && !over) {
-      flight.t += dt / flight.dur; const k = Math.min(1, flight.t);
-      bp.x = flight.x0 + (flight.x1 - flight.x0) * k; bp.z = flight.z0 + (flight.z1 - flight.z0) * k;
-      bp.y = R_BALL + 4 * flight.h * k * (1 - k);
-      if (flight.kind === 'pass' && bp.y < 1.9) {   // an opponent close to the ball may cut it out
-        for (const o of foes(flight.from)) if (!o.gk && dist(o, bp) < 1.1 && Math.random() < 0.07) { takeBall(o); break; }
-      }
-      if (flight && k >= 1) {
-        if (flight.kind === 'pass') takeBall(flight.to);
-        else if (flight.out === 'goal') {
-          score[flight.from.team]++; $(flight.from.team === 'home' ? 'sH' : 'sA').textContent = score[flight.from.team];
-          sfx('cheer', flight.from.team === 'home' ? 1 : 0.7); sfx('whistle', 0.5);
-          for (const q of mates(flight.from)) q.cel = 3; flight.from.cel = 3.5;
-          kickoffTeam = flight.from.team === 'home' ? 'away' : 'home'; pause = 3.4; flight = null; loose = 'goal';
-        } else if (flight.out === 'save') { sfx('ooh', 0.7); takeBall(flight.gk); hold = 1.4; }
-        else { sfx('ooh', 0.5); const gk = players.find(q => q.gk && q.team !== flight.from.team); takeBall(gk); hold = 1.4; bp.x = gk.x; bp.z = gk.z; }
-      }
-    } else if (carrier) {
-      bp.x = carrier.x + Math.sin(carrier.face) * 0.55; bp.z = carrier.z + Math.cos(carrier.face) * 0.55; bp.y = R_BALL + Math.abs(Math.sin(clock * 0.9)) * 0.03;
-    }
-    if (loose === 'goal' && pause <= 0) { loose = null; reset(kickoffTeam); }
-    else if (carrier && pause <= 0 && !over) {
-      hold -= dt;
-      if (hold <= 0) {
-        const toGoal = Math.abs(goalX(carrier) - carrier.x);
-        if (!carrier.gk && toGoal < 34 && Math.random() < 0.7) shoot(carrier); else pass(carrier);
-      } else for (const o of foes(carrier)) if (!o.gk && dist(o, carrier) < 0.9 && Math.random() < 0.012) { takeBall(o); break; }
-    }
-
-    // players
-    const holder = carrier || (flight && flight.kind === 'pass' ? flight.to : null);
-    const pressers = holder ? foes(holder).filter(o => !o.gk).sort((a, b) => dist(a, bp) - dist(b, bp)).slice(0, 2) : [];
-    for (const p of players) {
-      let tx, tz, sp = 4.2;
-      if (pause > 0 || over) { tx = p.cel > 0 && p.cel > 0.4 ? p.x : p.bx * 0.98; tz = p.cel > 0 && p.cel > 0.4 ? p.z : p.bz; sp = 3; }
-      else if (p.gk) {
-        const sx = p.dir * -(HX - 1.6);   // keepers stay by their own goal
-        tx = sx; tz = THREE.MathUtils.clamp(bp.z * 0.35, -3.2, 3.2); sp = 5;
-        if (flight && flight.kind === 'shot' && flight.gk === p) { tx = sx; tz = flight.z1; sp = 9; }
-      } else if (p === carrier) { tx = goalX(p); tz = p.z * 0.9; sp = 3.6; }
-      else if (flight && flight.kind === 'pass' && flight.to === p) { tx = flight.x1; tz = flight.z1; sp = 6.2; }
-      else if (pressers.includes(p) && (carrier || flight)) { tx = bp.x; tz = bp.z; sp = 5.6; }
-      else {
-        const w = 0.55; tx = p.bx + THREE.MathUtils.clamp(bp.x, -HX, HX) * w + Math.sin(clock * 0.07 + p.ph) * 2; tz = p.bz + (bp.z - p.bz) * 0.28 + Math.cos(clock * 0.06 + p.ph) * 1.5;
-        [tx, tz] = clampPitch(tx, tz); sp = 4;
-      }
-      steer(p, tx, tz, sp, dt);
-      if (p.cel > 0) p.cel -= dt;
-      // look where it runs (or at the ball when standing)
-      const speed = Math.hypot(p.vx, p.vz), want = speed > 0.6 ? Math.atan2(p.vx, p.vz) : Math.atan2(bp.x - p.x, bp.z - p.z);
-      let da = want - p.face; da = Math.atan2(Math.sin(da), Math.cos(da)); p.face += da * Math.min(1, dt * 8);
-      p.ph += dt * (2 + speed * 1.7); const sw = Math.sin(p.ph) * Math.min(0.9, speed * 0.17);
-      p.legL.rotation.x = sw; p.legR.rotation.x = -sw;
-      const up = p.cel > 0.4;   // arms in the air after a goal
-      p.armL.rotation.x = up ? -2.7 : -sw * 0.8; p.armR.rotation.x = up ? -2.7 : sw * 0.8;
-      p.g.position.set(p.x, up ? Math.abs(Math.sin(clock * 0.6)) * 0.18 : 0, p.z); p.body.rotation.y = p.face;
-    }
-    ball.position.set(bp.x, bp.y, bp.z);
-  }
-
-  function start() {
-    on = true; over = false; clock = 0; score.home = score.away = 0; $('sH').textContent = $('sA').textContent = '0'; $('sT').textContent = "0'";
-    $('score').hidden = false; root.visible = true; kickoffTeam = 'home'; reset('home');
-    el.ambient.volume = 0.42; el.ambient.currentTime = 0; el.ambient.play().catch(() => {});
-  }
-  function stop() { on = false; root.visible = false; $('score').hidden = true; el.ambient.pause(); }
-  return { tick, start, stop, get on() { return on; },
-    debug: () => ({ clock: Math.round(clock), score: { ...score }, carrier: carrier ? carrier.team + '#' + carrier.idx : null, flight: flight ? flight.kind : null, ball: [+bp.x.toFixed(1), +bp.z.toFixed(1)], players: players.map(p => [+p.x.toFixed(1), +p.z.toFixed(1)]) }) };
-})();
-toggle('btnMatch', on => { $('btnMatch').textContent = on ? 'Wyłącz mecz' : 'Włącz mecz'; on ? match.start() : match.stop(); });
 
 
 // ---------------------------------------------------------------------------
@@ -3185,11 +3075,11 @@ function frame(now) {
     const p = pick(lastMove.x, lastMove.y);
     setHover(p); showTip(p, lastMove.x, lastMove.y);
   }
-  match.tick(dt);
+  flags.tick(now);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 $('loading').remove();
-window.__stadium = { STANDS, PITS, scene, match, sectors, totalSeats, capacity, selectSeat, sectorByName, camera, controls, render: () => renderer.render(scene, camera) };
+window.__stadium = { STANDS, PITS, scene, sectors, totalSeats, capacity, selectSeat, sectorByName, camera, controls, render: () => renderer.render(scene, camera) };
 </script>
