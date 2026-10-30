@@ -315,8 +315,7 @@ function cornerStand(id, sx, sz, side, sideBack) {
     e: 2 * TAU, a0: toEnd ? aSide : aGoal, a1: toEnd ? aGoal : aSide,
     segA: toEnd ? sideOn : goalOn, segC: neg(toEnd ? goalOn : sideOn),   // row directions before and after the diagonal
     roofY: 25, back: sideBack, sx, sz, sideBack, endBack: 38,
-    // at the goal-end edge the lower rows rise as steeply as the goal-end stand they meet (0.54 m a metre)
-    tiers: { lower: { ...side.lower, rEnd: side.lower.d * 0.54 }, upper: side.upper },
+    tiers: { lower: side.lower, upper: side.upper },
   };
 }
 // height of row r of a corner tier at position s, depth o. Towards the goal-end edge the middle rows are raised
@@ -347,6 +346,12 @@ for (const st of STANDS) {
 }
 // ends of a corner row at depth o
 const rowS0 = (st, o) => -st.a0 - st.e * o, rowS1 = (st, o) => st.len + st.a1 + st.e * o;
+// The lower tier of a corner stops PASS short of the goal-end stand: the gap is an open passage at ground level
+// (for ambulances), from the pitch out through the corner building, under the upper tier. tierS0 / tierS1: the
+// ends of a row of tier key, the passage left out.
+const PASS = 4.5, PASS_H = 4.8;
+const tierS0 = (st, key, o) => rowS0(st, o) + (key === 'lower' && st.endS0 ? PASS : 0);
+const tierS1 = (st, key, o) => rowS1(st, o) - (key === 'lower' && !st.endS0 ? PASS : 0);
 const W = (st, s, o, y) => {
   if (st.segA) {
     const b = TAU * o;
@@ -363,7 +368,7 @@ const AISLE = 1.8;   // room kept clear at the ends of a corner row
 const BOX_ROWS = 4, BOX_ROW_D = 0.85;   // rows of the balcony in front of the skyboxes, as in the plan
 const rowDepth = (t, r) => t.o0 + r * t.d + t.d * 0.55;   // depth o of the seats in row r (0-based)
 // the seats keep clear of a corner row's ends
-const fanRow = (st, t, r) => { const o = rowDepth(t, r); return [rowS0(st, o) + 0.6 + AISLE / 2, rowS1(st, o) - 0.6 - AISLE / 2]; };
+const fanRow = (st, t, r, key) => { const o = rowDepth(t, r); return [tierS0(st, key, o) + 0.6 + AISLE / 2, tierS1(st, key, o) - 0.6 - AISLE / 2]; };
 
 // ---------------------------------------------------------------------------
 // The seats, as in the club's seating plan (SEATMAP). The plan is schematic: its rows are evenly spaced and
@@ -424,7 +429,7 @@ function fitRow(ps, a, b, m) {
       const mn = list.reduce((a, p) => a + p.num, 0) / list.length, mf = list.reduce((a, p) => a + p.f, 0) / list.length;
       let cov = 0;
       for (const p of list) {
-        const [a, b] = fanRow(st, t, p.r);
+        const [a, b] = fanRow(st, t, p.r, key);
         p.s = a + (b - a) * THREE.MathUtils.clamp((p.f - f0) / (f1 - f0), 0, 1);
         cov += (p.num - mn) * (p.f - mf);
       }
@@ -449,7 +454,7 @@ function fitRow(ps, a, b, m) {
     for (const [r, ps] of [...rows].sort((p, q) => p[0] - q[0])) {
       // (on the corners in number order, so neighbouring sectors never interleave)
       ps.sort(st.fan ? (a, b) => numDir * (a.num - b.num) : (a, b) => a.s - b.s);
-      if (st.fan) { const [a, b] = fanRow(st, t, r); fitRow(ps, a, b, 0.42); }
+      if (st.fan) { const [a, b] = fanRow(st, t, r, key); fitRow(ps, a, b, 0.42); }
       const ds = ps.slice(1).map((p, i) => p.s - ps[i].s).sort((a, b) => a - b), w = pitch || ds[ds.length >> 1] || 0.45;
       for (let i = 1; i < ps.length; i++) {
         const g = (ps[i].s - ps[i - 1].s) / w - 1, span = [r, ps[i - 1].s + w / 2, ps[i].s - w / 2];
@@ -500,13 +505,27 @@ function fitRow(ps, a, b, m) {
     if (st.fan) {
       const edges = [[], []];
       for (let r = 0; r < t.rows; r++) {
-        const o = rowDepth(t, r), a = rowS0(st, o), b = rowS1(st, o), ps = rows.get(r);
+        const o = rowDepth(t, r), a = tierS0(st, key, o), b = tierS1(st, key, o), ps = rows.get(r);
         if (!ps) { st.steps[key].push([r, a, b]); continue; }
         const s0 = ps[0].s - 0.5, s1 = ps[ps.length - 1].s + 0.5;
         if (s0 - a > 1.2) { st.steps[key].push([r, a, s0]); edges[0].push([r, s0]); }
         if (b - s1 > 1.2) { st.steps[key].push([r, s1, b]); edges[1].push([r, s1]); }
       }
       st.stepRails[key] = edges;
+    }
+    // behind the goals the plan's front rows stop about 4 m short of the stand's ends: the tier is cut back there
+    // (beside the corners' ambulance passages), so no bare steps are left
+    if (st.tiers.single) {
+      const ends = [s => s, s => lowerEnd(st, key) - s].map(d => {
+        let k = 0, cut = Infinity;
+        for (; k < t.rows && rows.has(k); k++) {
+          const ps = rows.get(k), e = Math.min(d(ps[0].s), d(ps[ps.length - 1].s)) - pitch / 2;
+          if (e < 1.5) break;
+          cut = Math.min(cut, e);
+        }
+        return k ? { rows: k, w: cut } : null;
+      });
+      st.endTrim = { key, ends };
     }
     // stairs running up the back of the tier (the skybox balcony behind leaves them clear)
     const back = Math.max(...st.stairs[key].map(g => g[0]));
@@ -1023,23 +1042,46 @@ for (const st of STANDS) {
       // the raised goal-end edge (rowLift) belongs to the slice at that end
       const t = T[key], prof = tierProfile(t, key), ex = st.exits[key], endPts = t.rEnd ? tierProfile(t, key, r => rowLift(t, r)) : null;
       // (each edge kept at or past the one before, so exits one above the other never fold a slice back)
-      let from = o => rowS0(st, o);
+      let from = o => tierS0(st, key, o);
       ex.forEach(({ c, h, rows }, i) => {
         const prev = from, a = o => Math.max(prev(o), c(o) - h), b = o => Math.max(a(o), c(o) + h);
         standMeshes.push(fanSolid(st, prof, concrete, { cast: true, sA: prev, sB: a, endPts: i === 0 && st.endS0 ? endPts : null }));
         standMeshes.push(fanSolid(st, recessProfile(t, key, rows), concrete, { cast: true, sA: a, sB: b }));
         from = b;
       });
-      standMeshes.push(fanSolid(st, prof, concrete, { cast: true, sA: from, endPts: !st.endS0 || !ex.length ? endPts : null }));
+      standMeshes.push(fanSolid(st, prof, concrete, { cast: true, sA: from, sB: o => tierS1(st, key, o), endPts: !st.endS0 || !ex.length ? endPts : null }));
     }
+    // the passage: the lower tier ends in a stepped wall, railed along its top (teal posts and rail, glass infill);
+    // the building over it is cut to a portal PASS_H high
+    const pEdge = o => st.endS0 ? tierS0(st, 'lower', o) : tierS1(st, 'lower', o), inw = st.endS0 ? 0.08 : -0.08;
+    {
+      const pts = [], rm = [];
+      for (let r = 0; r <= lo.rows; r++) {
+        const o = lo.o0 + r * lo.d, rr = Math.min(r, lo.rows - 1);
+        pts.push(W(st, pEdge(o) + inw, o, lo.y0 + rr * lo.r));
+      }
+      for (let i = 0; i + 1 < pts.length; i++) {
+        glassPanel(pts[i], pts[i + 1], 0.9);
+        member(rm, pts[i].clone().setY(pts[i].y + 1.0), pts[i + 1].clone().setY(pts[i + 1].y + 1.0), 0.05);
+        if (i % 2 === 0) member(rm, pts[i], pts[i].clone().setY(pts[i].y + 1.0), 0.05);
+      }
+      instancedMembers(rm, steelBlue, false);
+    }
+    // a profile swept over the corner with the passage left out below PASS_H (two pieces: beside it and over it)
+    const overPassage = (pts, mat, opt = {}) => {
+      const beside = st.endS0 ? { sA: pEdge } : { sB: pEdge }, over = st.endS0 ? { sB: pEdge } : { sA: pEdge };
+      const m = fanSolid(st, pts, mat, { ...opt, ...beside });
+      fanSolid(st, pts.map(([o, y]) => [o, Math.max(y, PASS_H)]), mat, { ...opt, ...over });
+      return m;
+    };
     // walkway behind the lower tier; in corner B the skybox balcony (SK23–SK25) with its four low steps
     const bt = st.boxTier, gO = bt ? bt.o0 + bt.rows * bt.d : loEnd + 1.15, yF = tierTop(lo);
-    fanSolid(st, [[gO + 0.15, 0], [gO + 0.15, up.y0 - 1.4], [upEnd, tierTop(up) - 1.8], [upEnd, 0]], coreMat);
+    overPassage([[gO + 0.15, 0], [gO + 0.15, up.y0 - 1.4], [upEnd, tierTop(up) - 1.8], [upEnd, 0]], coreMat);
     fanSolid(st, [[loEnd, yF - 0.15], [gO, yF - 0.15], [gO, yF], [loEnd, yF]], coreMat);
     if (bt) for (let i = 0; i < bt.rows; i++) fanSolid(st, [[bt.o0 + i * bt.d, yF], [gO, yF], [gO, bt.y0 + i * bt.r], [bt.o0 + i * bt.d, bt.y0 + i * bt.r]], coreMat);
     standMeshes.push(fanSolid(st, [[gO, yF], [gO + 0.15, yF], [gO + 0.15, up.y0 - 0.5], [gO, up.y0 - 0.5]], skyGlass));
     const fTop = tierTop(up) + 1.3;
-    fanSolid(st, [[upEnd, 0], [upEnd, fTop], [st.back, fTop], [st.back, 0]], blackGlass, { cast: true });
+    overPassage([[upEnd, 0], [upEnd, fTop], [st.back, fTop], [st.back, 0]], blackGlass, { cast: true });
     fanSolid(st, [[st.back, 7.2], [st.back + 0.35, 7.2], [st.back + 0.35, 8.4], [st.back, 8.4]], whiteBand);
     fanSolid(st, [[st.back, 15.5], [st.back + 0.35, 15.5], [st.back + 0.35, 16.1], [st.back, 16.1]], whiteBand);
     // band on the front of the upper tier, continuing the side stand's: red like stand E's LED fascia, grey
@@ -1052,7 +1094,8 @@ for (const st of STANDS) {
     const ob = st.back, xz = p => [p.x, p.z];
     const ends = [W(st, rowS0(st, ob), ob, 0), W(st, rowS1(st, ob), ob, 0)], bends = [W(st, -TAU * ob, ob, 0), W(st, st.len + TAU * ob, ob, 0)];
     const [g, sd] = st.endS0 ? [0, 1] : [1, 0], zB = st.sz * (41.5 + st.sideBack), xB = st.sx * (61.5 + st.endBack);
-    cornerFill([xz(bends[sd]), [xB, zB], [xB, st.sz * GOAL_HALF], xz(ends[g]), xz(bends[g])], fTop);
+    // (leaving the passage open along the goal-end stand's end)
+    cornerFill([xz(bends[sd]), [xB, zB], [xB, st.sz * (GOAL_HALF + PASS)], [ends[g].x, st.sz * (GOAL_HALF + PASS)], xz(bends[g])], fTop);
     continue;
   }
   // each tier is extruded in pieces: the full profile, cut where an exit opens off a stair (the recess) and,
@@ -1066,6 +1109,15 @@ for (const st of STANDS) {
       cuts.push([tn.s0, tn.s1, [[t.o0 + tn.rows * t.d, 0], ...pts, [tierEnd(t), tierTop(t) + 1.1], [tierEnd(t), 0]]]);
     }
     for (const { c, h, rows } of st.exits[key]) cuts.push([c(0) - h, c(0) + h, recessProfile(t, key, rows)]);
+    // (the front rows cut back at the ends, where the plan has no seats in them)
+    const tr = st.endTrim && st.endTrim.key === key ? st.endTrim.ends : [];
+    tr.forEach((e, i) => {
+      if (!e) return;
+      const pts = [];
+      for (let r = e.rows; r < t.rows; r++) { const y = t.y0 + r * t.r; pts.push([t.o0 + r * t.d, y], [t.o0 + (r + 1) * t.d, y]); }
+      const p = [[t.o0 + e.rows * t.d, 0], ...pts, [tierEnd(t), tierTop(t) + 1.1], [tierEnd(t), 0]];
+      cuts.push(i ? [lowerEnd(st, key) - e.w, lowerEnd(st, key), p] : [0, e.w, p]);
+    });
     cuts.sort((p, q) => p[0] - q[0]);
     let s0 = 0;
     for (const [a, b, p] of cuts) {
