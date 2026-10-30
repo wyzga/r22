@@ -1598,14 +1598,14 @@ for (const st of STANDS) {
     // its ends are glazed in light reflective glass, as photographed
     const glazed = texMat(TX_FACADE, 6, { color: TX_FACADE ? 0xb4c3d3 : 0x6b7f96, roughness: 0.08, metalness: 0.6, emissive: 0x0d1624 });
     // (on E there is no glass above the top row: as photographed, the roof sits on a deep concrete beam carried by
-    // a row of concrete columns, the space between them dark; beam and columns run on over the corners, under the
-    // roof, standing on the corner buildings, with a dark wall behind them)
-    const recess = new THREE.MeshStandardMaterial({ color: 0x15181d, roughness: 1 });
+    // a row of concrete columns, open between them, so the sky shows through; the building stops level with the
+    // top of the parapet behind the last row; beam and columns run on over the corners, under the roof, standing
+    // on the corner buildings)
     const faces = m => [blackGlass, blackGlass, blackGlass, blackGlass, blackGlass, m].map((m, i) => i < 2 && st.kind === 'main' ? glazed : m);
-    boxL(st, 0, L, upEnd, B, 0, R - 2.2, faces(st.kind === 'masts' ? recess : glazed), { cast: true });
+    // (its face 1 cm behind the tier's parapet, so the two do not flicker against each other)
+    boxL(st, 0, L, upEnd + 0.01, B, 0, st.kind === 'masts' ? tierTop(up) + 1.1 : R - 2.2, faces(st.kind === 'masts' ? coreMat : glazed), { cast: true });
     if (st.kind === 'masts') {
       const [w0, w1] = st.wings;
-      for (const [a, b] of [[-w0, 0], [L, L + w1]]) boxL(st, a, b, B - 0.4, B, tierTop(up), R - 2.2, faces(recess), { cast: true });
       boxL(st, -w0, L + w1, upEnd - 0.5, B, R - 3.4, R - 1.5, coreMat, { cast: true });
       const n = Math.round((L + w0 + w1) / 4.4);
       for (let i = 0; i <= n; i++) { const s = -w0 + 0.4 + (L + w0 + w1 - 0.8) * i / n; boxL(st, s - 0.3, s + 0.3, upEnd - 0.5, upEnd + 0.3, tierTop(up), R - 3.4, coreMat, { cast: true }); }
@@ -1933,7 +1933,7 @@ function chairGeometry(w) {
 // One instanced quad per seat; the shader spells the per-instance number (aNum) from a 0–9 digit atlas.
 const numberPlate = (() => {
   const g = new THREE.PlaneGeometry(0.1, 0.05);
-  g.translate(0, 0.15, 0.0265);                             // on the front face of the backrest, near its top
+  g.translate(0, 0.15, 0.03);                               // on the front face of the backrest, near its top
   g.rotateX(-0.12); g.translate(0, PAN_Y + 0.23, -0.17);   // same tilt and place as the backrest
   return g;
 })();
@@ -1962,6 +1962,8 @@ const numberMat = new THREE.ShaderMaterial({
     varying vec2 vUv; varying float vNum;
     void main() {
       #include <logdepthbuf_fragment>
+      // too small on screen to read (under ~20 px across) the digits would only break up into flickering dots
+      if (fwidth(vUv.x) > 0.05) discard;
       float n = floor(vNum + 0.5);
       float k = n < 10.0 ? 1.0 : (n < 100.0 ? 2.0 : 3.0);
       // up to three digit cells across the plate, centred
