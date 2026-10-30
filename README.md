@@ -63,7 +63,8 @@ Otwórz `stadion-wisla/index.html` w przeglądarce. To samodzielna kopia z wbudo
 - W czasie meczu wokół boiska też toczy się życie:
   - Na ławce Wisły (bliżej +x) i na ławce gości siedzą rezerwowy bramkarz, czterech rezerwowych w bluzach w barwach drużyny i dwóch członków sztabu w granatowych dresach. Pozostałe krzesełka są wolne.
   - Na małej ławce przy tunelu siedzi sędzia techniczny na czarno.
-  - Przed każdą ławką chodzi trener w ciemnym stroju. Co jakiś czas staje, patrzy na grę i wskazuje ręką.
+  - Przed każdą ławką rezerwowych jest strefa techniczna, obrysowana na murawie białą przerywaną linią. Zaczyna się przy krawędzi ławki, wychodzi 1 m poza jej końce i kończy się 1,6 m przed linią boczną, więc liniowy biega obok niej.
+  - W tej strefie chodzi trener w ciemnym stroju. Co jakiś czas staje, patrzy na grę i wskazuje ręką.
   - Za liniami końcowymi stoi po czterech kamerzystów z kamerami na statywach. Kamery obracają się za piłką.
   - W narożnikach po stronie ławek, za linią boczną, rozgrzewa się po pięciu rezerwowych w odblaskowych koszulkach: Wisły żółtozielonych, gości pomarańczowych. Biegają tam i z powrotem po 13 m i robią pajacyki. Po golu swojej drużyny podnoszą ręce razem z trenerem.
   - Każda postać (z piłkarzami włącznie) to tylko 5 wywołań rysowania: tułów i kończyny są złączone, a kolory zapisane w wierzchołkach. Siedzący i kamerzyści są złączeni w kilka siatek. Mimo większej liczby postaci mecz rysuje się szybciej niż wcześniej.

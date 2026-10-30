@@ -1777,7 +1777,7 @@ for (const st of STANDS) {
         boxL(st, s0, s1, o0, o0 + 0.2, FL, 0.35, concrete, { cast: true });                // kerb on the pitch side, 0.35 m over the turf
         for (const e of [s0, s1 - 0.2]) boxL(st, e, e + 0.2, o0, o1, FL, 0, concrete);   // side walls
         boxL(st, s0, s1, o1 - 0.35, o1, FL, 0.45, navy);                                   // back wall
-        const bench = { n, seats: [], yaw: 0, front: [W(st, s0 + 0.5, o0 - 1.2, 0), W(st, s1 - 0.5, o0 - 1.2, 0)] };
+        const bench = { n, seats: [], yaw: 0, front: [W(st, s0 + 0.5, o0 - 1.2, 0), W(st, s1 - 0.5, o0 - 1.2, 0)], kerb: [W(st, s0, o0, 0), W(st, s1, o0, 0)] };
         const fw = W(st, s, o0, 0).sub(W(st, s, o1, 0)); bench.yaw = Math.atan2(fw.x, fw.z);
         BENCHES.push(bench);
         for (let k = 0; k < n; k++) {                                                       // seats
@@ -3305,6 +3305,20 @@ const setNight = (() => {
   };
 })();
 toggle('tNight', setNight);
+
+// The technical areas: a dashed white line on the turf round the strip in front of each reserve bench, from its
+// kerb out 1 m past either end of the dugout and forward to 1.6 m short of the touch line (the assistant referee
+// runs along outside it); the coaches pace inside
+{
+  const g = grassTex.image.getContext('2d'), X = x => (x + GX / 2) * PPM, Z = z => (z + GZ / 2) * PPM;
+  g.strokeStyle = 'rgba(255,255,255,0.93)'; g.lineWidth = 0.1 * PPM; g.setLineDash([0.6 * PPM, 0.45 * PPM]);
+  for (const b of BENCHES.filter(b => b.n > 3)) {
+    const [a, c] = b.kerb, x0 = Math.min(a.x, c.x) - 1, x1 = Math.max(a.x, c.x) + 1, zk = a.z, zf = Math.sign(zk) * (PW / 2 + 1.6);
+    g.beginPath(); g.moveTo(X(x0), Z(zk)); g.lineTo(X(x0), Z(zf)); g.lineTo(X(x1), Z(zf)); g.lineTo(X(x1), Z(zk)); g.stroke();
+  }
+  g.setLineDash([]);
+  grassTex.needsUpdate = true;
+}
 
 // Cut the dugout pits out of the turf and its markings layer: the pitch plane becomes a few rectangles around the holes
 (function carvePits() {
