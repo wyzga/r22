@@ -284,6 +284,7 @@
     <span class="sep" aria-hidden="true"></span>
     <label class="occ" for="occ"><span>Zajętość</span><input type="range" id="occ" min="0" max="100" value="0" aria-describedby="occOut"><output id="occOut" for="occ">0%</output></label>
     <button class="btn" id="tLabels" aria-pressed="true">Etykiety sektorów</button>
+    <button class="btn" id="tNight" aria-pressed="false">Noc</button>
     <button class="btn" id="btnMatch" aria-pressed="false">Włącz mecz</button>
   </nav>
 </div>
@@ -721,7 +722,8 @@ function fitRow(ps, a, b, m) {
         h -= ns * sw;
         for (const [o, m, wd, r] of g.pts) for (const [a, b] of [[m - wd / 2, c(o) - h], [c(o) + h, m + wd / 2]]) if (b - a > 0.2) st.stairs[key].push([r, a, b]);
       }
-      return { c, h, rows: [g.r0, g.r1] };
+      // (behind the goals the gap at the top, in the middle, is no exit but a camera platform: railed, no doors)
+      return { c, h, rows: [g.r0, g.r1], camera: !!st.tiers.single && g.r1 >= t.rows - 2 };
     }).sort((p, q) => p.c(tierMid) - q.c(tierMid));   // (in order at mid-depth: on a corner they drift apart with depth)
     // (the corner's exit, and its stair down to the pitch)
     if (cxSpec && !cx) cx = makeCx();
@@ -1175,6 +1177,7 @@ members.silver = [];
 // of the roof and leaning out over the pitch, tied back to the roof by two rods, with the lamp head of
 // 4 × 3 floodlights at the top angled down at the pitch, and stays to the front edge
 let lampMat = null;
+const floodHeads = [];   // the lamp heads, for the night view: where each is and the point of the pitch it lights
 function floodMast(st, s, R) {
   const P = (s, o, y) => W(st, s, o, y), oF = 3, len = 15, lean = 0.6;
   const oT = oF - len * Math.sin(lean), yT = R + len * Math.cos(lean), at = f => [oF + (oT - oF) * f, R + (yT - R) * f];
@@ -1198,6 +1201,7 @@ function floodMast(st, s, R) {
   head.quaternion.copy(st.q); head.rotateX(-0.75);
   head.position.copy(P(s, oT - 0.6, yT + 0.9));
   add(head, { cast: true });
+  floodHeads.push({ pos: P(s, oT - 1.2, yT + 0.4), target: P(s, -38, 0) });
   member(members.cable, P(s, oT, yT), P(s - 6, -1.6, R + 0.3), 0.1);
   member(members.cable, P(s, oT, yT), P(s + 6, -1.6, R + 0.3), 0.1);
 }
@@ -2142,14 +2146,22 @@ function exitGateSign(name) {
     if (plain.length) add(new THREE.Mesh(mergeGeometries(plain), stairMat));
     for (const [key, list] of Object.entries(st.exits)) {
       const t = st.tiers[key], rails = [];
-      for (const { c, h, rows: [v0, v1], down } of list) {
+      for (const { c, h, rows: [v0, v1], down, camera } of list) {
         const oB = t.o0 + (v1 + 1) * t.d, yA = t.y0 + v0 * t.r, yT = t.y0 + Math.min(v1 + 1, t.rows - 1) * t.r;
         const dH = Math.max(1.6, Math.min(2.2, yT - yA - 0.35)), dW = Math.min(2.0, 2 * h - 0.4), sb = c(oB);
-        // doors: dark glass in a light frame, split in two leaves
-        plane(st, sb, dW, oB - 0.02, yA + dH / 2, dH, doorGlassMat);
-        for (const e of [-dW / 2, 0, dW / 2]) boxL(st, sb + e - 0.05, sb + e + 0.05, oB - 0.06, oB, yA, yA + dH, doorFrameMat);
-        boxL(st, sb - dW / 2 - 0.05, sb + dW / 2 + 0.05, oB - 0.06, oB, yA + dH - 0.08, yA + dH, doorFrameMat);
-        if (yT - yA - dH > 0.32) plane(st, sb, 0.5, oB - 0.03, yA + dH + 0.17, 0.2, exitSignMat);
+        if (camera) {
+          // the camera platform: a railing across its front instead of doors at the back
+          const oF = t.o0 + v0 * t.d, l = W(st, c(oF) - h, oF, yA), rr = W(st, c(oF) + h, oF, yA), m = l.clone().lerp(rr, 0.5);
+          glassPanel(l, rr, 0.8);
+          rails.push([l.clone().setY(yA + 0.9), rr.clone().setY(yA + 0.9)]);
+          for (const p of [l, m, rr]) rails.push([p, p.clone().setY(yA + 0.9)]);
+        } else {
+          // doors: dark glass in a light frame, split in two leaves
+          plane(st, sb, dW, oB - 0.02, yA + dH / 2, dH, doorGlassMat);
+          for (const e of [-dW / 2, 0, dW / 2]) boxL(st, sb + e - 0.05, sb + e + 0.05, oB - 0.06, oB, yA, yA + dH, doorFrameMat);
+          boxL(st, sb - dW / 2 - 0.05, sb + dW / 2 + 0.05, oB - 0.06, oB, yA + dH - 0.08, yA + dH, doorFrameMat);
+          if (yT - yA - dH > 0.32) plane(st, sb, 0.5, oB - 0.03, yA + dH + 0.17, 0.2, exitSignMat);
+        }
         // railings along both sides, following the rows, and across the top over the doors
         for (const dir of [-1, 1]) {
           const edge = [];
@@ -2885,6 +2897,36 @@ const toggle = (id, fn) => { const b = $(id); b.onclick = () => { const on = b.g
   setOcc();
 }
 toggle('tLabels', on => { labelsOn = on; applyModeVisuals(); });
+// night: a dark sky and the floodlights on, their lamp heads glowing and each throwing a beam down across the
+// pitch; the sun becomes the floodlights' overall wash from high over the pitch, cool white
+const setNight = (() => {
+  const glowTex = canvasTex(128, 128, (g, w, h) => {
+    const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.22, 'rgba(236,243,255,0.6)'); gr.addColorStop(1, 'rgba(200,215,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  }, false);
+  const lights = new THREE.Group();
+  lights.visible = false; scene.add(lights);
+  for (const { pos, target } of floodHeads) {
+    const sp = new THREE.SpotLight(0xf1f5ff, 3.2, 0, 0.62, 0.75, 0);
+    sp.position.copy(pos); sp.target.position.copy(target);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
+    glow.position.copy(pos); glow.scale.set(10, 10, 1);
+    lights.add(sp, sp.target, glow);
+  }
+  const day = { top: skyMat.uniforms.top.value.clone(), bottom: skyMat.uniforms.bottom.value.clone(), fog: scene.fog.color.clone(),
+    hemi: [hemi.color.clone(), hemi.groundColor.clone(), hemi.intensity], sun: [sun.color.clone(), sun.intensity, sun.position.clone()] };
+  return on => {
+    lights.visible = on;
+    skyMat.uniforms.top.value.set(on ? 0x02050d : day.top); skyMat.uniforms.bottom.value.set(on ? 0x1b2236 : day.bottom);
+    scene.fog.color.set(on ? 0x0b1020 : day.fog);
+    hemi.color.set(on ? 0x6d7fa8 : day.hemi[0]); hemi.groundColor.set(on ? 0x1c2416 : day.hemi[1]); hemi.intensity = on ? 0.7 : day.hemi[2];
+    sun.color.set(on ? 0xeef3ff : day.sun[0]); sun.intensity = on ? 0.75 : day.sun[1];
+    if (on) sun.position.set(-15, 160, 20); else sun.position.copy(day.sun[2]);
+    if (lampMat) { lampMat.emissive.set(on ? 0xffffff : 0x000000); lampMat.emissiveMap = lampMat.map; lampMat.emissiveIntensity = 2.2; lampMat.needsUpdate = true; }
+  };
+})();
+toggle('tNight', setNight);
 
 // Cut the dugout pits out of the turf and its markings layer: the pitch plane becomes a few rectangles around the holes
 (function carvePits() {
