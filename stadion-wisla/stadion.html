@@ -1781,12 +1781,14 @@ for (const st of STANDS) {
         boxL(st, s0 - 0.1, s1 + 0.1, o0 + 0.1, o1, FL + 1.67, FL + 1.73, new THREE.MeshStandardMaterial({ color: 0x9fb3d8, transparent: true, opacity: 0.4, roughness: 0.2 }));   // clear roof, low enough not to hide the first row
       }
       // players' tunnel: a passage with glass sides under the front rows to glass doors, a concrete slab over it, and in
-      // front a blue fabric canopy with side drapes reaching out towards the touch line
+      // front a blue fabric canopy with side drapes reaching out towards the touch line; all of it kept low (the slab
+      // finishes under the first row over it, the canopy level with the slab and short), so it does not cut into
+      // the view of the pitch from the seats above
       {
-        const tn = st.tunnel, t = T.lower, m = (tn.s0 + tn.s1) / 2, oB = t.o0 + tn.rows * t.d, h = 2.6;
+        const tn = st.tunnel, t = T.lower, m = (tn.s0 + tn.s1) / 2, oB = t.o0 + tn.rows * t.d, h = Math.min(2.2, t.y0 + tn.rows * t.r - 0.32);
         const wallMat = new THREE.MeshStandardMaterial({ color: 0x2a2f38, roughness: 0.8 }), floorMat = new THREE.MeshStandardMaterial({ color: 0x1d2027, roughness: 1 });
         const fabric = new THREE.MeshStandardMaterial({ color: 0x4b69a6, roughness: 0.75, side: THREE.DoubleSide });
-        boxL(st, tn.s0, tn.s1, 0, oB, h, h + 0.25, coreMat, { cast: true });
+        boxL(st, tn.s0, tn.s1, 0, oB, h, h + 0.25, coreMat, { cast: true });   // (its top a few cm under the first row's step)
         for (const e of [tn.s0 + 0.1, tn.s1 - 0.1]) glassPanel(W(st, e, 0, 0), W(st, e, oB, 0), h);   // glass sides, as photographed
         boxL(st, tn.s0 + 0.2, tn.s1 - 0.2, 0, oB, 0, 0.03, floorMat);
         boxL(st, tn.s0 + 0.2, tn.s1 - 0.2, 0, oB, h - 0.06, h, new THREE.MeshStandardMaterial({ color: 0x8d939c, roughness: 0.6 }));
@@ -1795,10 +1797,10 @@ for (const st of STANDS) {
         for (const e of [tn.s0 + 0.2, m - 0.06, tn.s1 - 0.32]) boxL(st, e, e + 0.12, oB - 0.08, oB - 0.02, 0, h, wallMat);
         boxL(st, tn.s0 + 0.2, tn.s1 - 0.2, oB - 0.08, oB - 0.02, h - 0.35, h - 0.25, wallMat);
         // the canopy
-        const c0 = tn.s0 - 0.5, c1 = tn.s1 + 0.5, oF = -3.2;
-        boxL(st, c0, c1, oF, 0.1, h + 0.25, h + 0.4, fabric, { cast: true });
-        boxL(st, c0, c1, oF - 0.05, oF + 0.08, h - 0.3, h + 0.4, fabric, { cast: true });
-        for (const e of [c0, c1 - 0.08]) boxL(st, e, e + 0.08, oF, 0.1, 0, h + 0.4, fabric, { cast: true });
+        const c0 = tn.s0 - 0.2, c1 = tn.s1 + 0.2, oF = -1.8, cT = h + 0.2;
+        boxL(st, c0, c1, oF, 0.1, cT - 0.12, cT, fabric, { cast: true });
+        boxL(st, c0, c1, oF - 0.05, oF + 0.06, cT - 0.4, cT, fabric, { cast: true });
+        for (const e of [c0, c1 - 0.06]) boxL(st, e, e + 0.06, oF, 0.1, 0, cT, fabric, { cast: true });
       }
       // main entrance: a flat canopy ("tongue") cantilevered out of the facade over the drop-off, on slim columns at its tip
       const cs = L * 0.52, cw = 28, cd = 24, cy = 6.4;
