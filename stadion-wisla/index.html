@@ -374,6 +374,7 @@ const tierEnd = t => t.o0 + t.rows * t.d;
 const tierTop = t => t.y0 + (t.rows - 1) * t.r;
 const AISLE = 1.8;   // room kept clear at the ends of a corner row
 const BOX_ROWS = 4, BOX_ROW_D = 0.85;   // rows of the balcony in front of the skyboxes, as in the plan
+const BAL_RAIL = 0.38;   // the balcony's front railing, this far behind the lower tier's back
 const rowDepth = (t, r) => t.o0 + r * t.d + t.d * 0.55;   // depth o of the seats in row r (0-based)
 // the seats keep clear of a corner row's ends
 const fanRow = (st, t, r, key) => { const o = rowDepth(t, r); return [tierS0(st, key, o) + 0.6 + AISLE / 2, tierS1(st, key, o) - 0.6 - AISLE / 2]; };
@@ -1177,6 +1178,16 @@ for (const st of STANDS) {
     cornerPiece([[gO + 0.15, 0], [gO + 0.15, up.y0 - 1.4], [upEnd, tierTop(up) - 1.8], [upEnd, 0]], coreMat);
     cornerPiece([[loEnd, yF - 0.15], [gO, yF - 0.15], [gO, yF], [loEnd, yF]], coreMat);
     if (bt) for (let i = 0; i < bt.rows; i++) cornerPiece([[bt.o0 + i * bt.d, yF], [gO, yF], [gO, bt.y0 + i * bt.r], [bt.o0 + i * bt.d, bt.y0 + i * bt.r]], coreMat);
+    // the balcony's railing, on from the main stand's along its front (through the bends) and across its end at edgeU
+    if (bt) {
+      const rm = [], oR = loEnd + BAL_RAIL, yB = bt.y0, s0 = st.endS0 ? rowS1(st, oR) : rowS0(st, oR), s1 = st.edgeU(oR);
+      const n = Math.ceil(Math.abs(s1 - s0) / 2), ss = Array.from({ length: n + 1 }, (_, i) => s0 + (s1 - s0) * i / n);
+      for (const b of [-TAU * oR, st.len + TAU * oR]) if ((b - s0) * (b - s1) < 0) ss.push(b);
+      ss.sort((a, b) => Math.abs(a - s0) - Math.abs(b - s0));
+      rail(rm, ss.map(s => W(st, s, oR, yB)));
+      rail(rm, [W(st, s1, oR, yB), W(st, st.edgeU(gO - 0.05), gO - 0.05, bt.y0 + (bt.rows - 1) * bt.r)]);
+      instancedMembers(rm, steelBlue, false);
+    }
     standMeshes.push(cornerPiece([[gO, yF], [gO + 0.15, yF], [gO + 0.15, up.y0 - 0.5], [gO, up.y0 - 0.5]], skyGlass));
     const fTop = tierTop(up) + 1.3;
     cornerPiece([[upEnd, 0], [upEnd, fTop], [st.back, fTop], [st.back, 0]], blackGlass, { cast: true });
@@ -1286,6 +1297,14 @@ for (const st of STANDS) {
     if (st.kind === 'main') {
       const rm = [];
       for (const [key, t] of [['lower', lo], ['upper', up]]) rail(rm, rowEdge(st, t, lowerEnd(st, key) - 0.03, 0, t.rows));
+      instancedMembers(rm, steelBlue, false);
+    }
+    // railing along the front of the skybox balcony, and across its ends (on the main stand it carries on into
+    // corner B at s = 0)
+    {
+      const rm = [], yB = yF + 0.45, oR = loEnd + BAL_RAIL, n = Math.ceil(L / 2);
+      rail(rm, Array.from({ length: n + 1 }, (_, i) => W(st, L * i / n, oR, yB)));
+      for (const sE of st.kind === 'main' ? [L - 0.03] : [0.03, L - 0.03]) rail(rm, [W(st, sE, oR, yB), W(st, sE, gO - 0.05, yB + (boxRows - 1) * 0.2)]);
       instancedMembers(rm, steelBlue, false);
     }
     // door frames every few panels and the box partitions
