@@ -2364,7 +2364,24 @@ const totalSeats = sectors.reduce((a, s) => a + s.seats.length, 0);
     rail(rm, rowEdge(sd, sd.tiers.upper, sA, 0, sd.tiers.upper.rows));
     rail(rm, rowEdge(sd, c.tiers.upper, sB, 0, c.tiers.upper.rows));
   }
+  // and between the sectors of C and G, as photographed: where two sectors' seats meet with no stair between
+  // them, a glass railing runs from the front row to the back in the narrow gap between their end seats (the
+  // seats stay where they are), on a sloping dark blue beam along the row edges (the away sector's stair on G
+  // has its own railings)
+  const beams = [];
+  for (const st of STANDS.filter(s => s.tiers.single)) {
+    const t = st.tiers.single, sOf = p => (p.x - st.P0.x) * st.t.x + (p.z - st.P0.z) * st.t.z;
+    const spans = sectors.filter(sec => sec.st === st).map(sec => { const ss = sec.seats.map(sOf); return [Math.min(...ss), Math.max(...ss)]; }).sort((a, b) => a[0] - b[0]);
+    for (let i = 0; i + 1 < spans.length; i++) {
+      if (spans[i + 1][0] - spans[i][1] > 1) continue;
+      const pts = rowEdge(st, t, (spans[i][1] + spans[i + 1][0]) / 2, 0, t.rows);
+      rail(rm, pts);
+      const top = pts[pts.length - 2];   // (the front edge of the last row: the edge points rise in a straight line up to it)
+      member(beams, pts[0].clone().setY(pts[0].y + 0.12), top.clone().setY(top.y + 0.12), 0.12);
+    }
+  }
   instancedMembers(rm, steelBlue, false);
+  instancedMembers(beams, new THREE.MeshStandardMaterial({ color: 0x1f3e8a, roughness: 0.6 }), false);
   buildGlassPanels();
 }
 const capacity = sectors.reduce((a, s) => a + (s.name === 'PRASA' ? 0 : s.seats.length), 0);   // 33 258, as in the plan
