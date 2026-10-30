@@ -1271,6 +1271,17 @@ function arenaLogo(g, w, h, ink = '#ffffff') {
   g.fillText('ARENA KRAKÓW', x, cy);
   g.letterSpacing = '0px';
 }
+// loudspeakers under a stand's roof, as photographed: n black boxes evenly along the stand, hung on rods a few
+// metres in from the roof's front edge (eight under each side stand's roof, five under each goal-end stand's)
+const speakerMat = new THREE.MeshStandardMaterial({ color: 0x15171b, roughness: 0.7, metalness: 0.2 });
+function speakers(st, n, R) {
+  const o = 5, top = R - 0.9;
+  for (let i = 0; i < n; i++) {
+    const s = (i + 0.5) * st.len / n;
+    boxL(st, s - 0.4, s + 0.4, o - 0.35, o + 0.35, top - 1.2, top, speakerMat, { cast: true });
+    member(members.silver, W(st, s, o, top), W(st, s, o, R - 0.4), 0.06);
+  }
+}
 // 4:3 video screens under the roofs of the side stands, centred on the stand
 function videoScreen(st, up, R) {
   // hung from the front of the roof, just behind its edge, on rods from the roof girders (as photographed)
@@ -1663,6 +1674,7 @@ for (const st of STANDS) {
     const roof = vaultRoof(st, -w0, L + w1, -1.5, B + 1.5, R - 0.35);
     roof.renderOrder = 2;   // drawn after the lower goal-end roofs it overlaps, in a fixed order (no flicker)
     st.roofMeshes = [roof];
+    speakers(st, 8, R);
     boxL(st, -w0, L + w1, -2.4, -1.2, R - 1.5, R + 0.4, whiteBand, { cast: true });
     boxL(st, -w0, L + w1, -2.3, -1.3, R - 1.62, R - 1.5, roofLightMat);
     boxL(st, -w0, L + w1, B + 1.2, B + 1.6, R - 1.4, R + 0.2, whiteBand, { cast: true });
@@ -1694,6 +1706,7 @@ for (const st of STANDS) {
     const roof = vaultRoof(st, -ge0, L + ge1, -1.5, B + 1.2, R - 0.35);
     roof.renderOrder = 1;
     st.roofMeshes = [roof];
+    speakers(st, 5, R);
     boxL(st, -ge0, L + ge1, -2.4, -1.2, R - 1.7, R + 0.3, whiteBand, { cast: true });
     boxL(st, -ge0, L + ge1, -2.3, -1.3, R - 1.82, R - 1.7, roofLightMat);
     const nCol = 8;
