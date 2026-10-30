@@ -445,6 +445,21 @@ function fitRow(ps, a, b, m) {
       const L = lowerEnd(st, key), N = Math.round((a1 - a0) / 150) + 1;
       pitch = L / N;
       for (const p of list) { const u = ((along(p) - a0) / 150 + 0.5) * pitch; p.s = dir > 0 ? u : L - u; }
+      if (st.kind === 'main') {
+        // on the main stand the players' tunnel (the widest gap in the plan's front row) stays on the halfway line,
+        // all tiers lined up with it (the lower tier runs on into the H wing at one end only): one pitch, small
+        // enough that both sides still fit
+        if (st.planMid === undefined) {
+          const xs = st.placed.lower.filter(p => p.r === 0).map(along).sort((a, b) => a - b);
+          let g = 0;
+          for (let i = 1; i < xs.length; i++) if (xs[i] - xs[i - 1] > xs[g + 1] - xs[g]) g = i - 1;
+          st.planMid = (xs[g] + xs[g + 1]) / 2;
+        }
+        const sH = -(st.P0.x * st.t.x + st.P0.z * st.t.z), uH = (st.planMid - a0) / 150 + 0.5, k = dir > 0 ? 1 : -1;
+        const [near, far] = dir > 0 ? [sH, L - sH] : [L - sH, sH];
+        pitch = Math.min(L / N, near / uH, far / (N - uH));
+        for (const p of list) p.s = sH + k * ((along(p) - a0) / 150 + 0.5 - uH) * pitch;
+      }
     }
     if (key === 'box') { for (const p of list) p.o = rowDepth(t, p.r); continue; }   // (no stairs or exits on the balcony)
     const rows = new Map();
@@ -509,7 +524,7 @@ function fitRow(ps, a, b, m) {
     // the players' tunnel: the gap under the front rows of the main stand
     if (st.kind === 'main' && key === 'lower') {
       const i = st.exits.lower.findIndex(e => e.rows[0] === 0);
-      if (i >= 0) { const e = st.exits.lower.splice(i, 1)[0], c = e.c(0); st.tunnel = { key, s0: c - e.h, s1: c + e.h, rows: e.rows[1] + 1 }; }
+      if (i >= 0) { const e = st.exits.lower.splice(i, 1)[0], c = e.c(0); st.tunnel = { key, s0: c - e.h, s1: c + e.h, rows: e.rows[1] + 1 } }
     }
     // the press stand: the wide gap in the upper tier of the main stand, desks where it is widest (over 20 m), and
     // a TV camera platform in its narrower front part
