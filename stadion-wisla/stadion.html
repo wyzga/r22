@@ -42,6 +42,21 @@
   /* title card: thin red strip on top like the site's announcement bar */
   .brand { grid-column: 1; grid-row: 1; justify-self: start; align-self: start; max-width: 410px; padding: 0 0 14px; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; align-items: center; overflow: hidden; }
   .brand::before { content: "Wirtualny stadion · wybierz miejsce"; grid-column: 1 / -1; background: var(--red); color: #fff; font: 600 11px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; padding: 7px 16px; }
+  /* the card folds away to the left (the arrow in its red strip); a red tab on the screen's edge pulls it back */
+  .brand { position: relative; transition: transform .42s cubic-bezier(.2, .8, .2, 1), opacity .3s; }
+  .brand.folded { transform: translateX(calc(-100% - 48px)); opacity: 0; pointer-events: none; }
+  .b-fold { position: absolute; top: 0; right: 0; width: 34px; height: 25px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: #fff; cursor: pointer; }
+  .b-fold:hover { background: var(--red-deep); }
+  .b-fold svg, .brand-tab svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .brand-tab {
+    position: fixed; left: 0; top: max(16px, env(safe-area-inset-top, 0px)); z-index: 5; display: flex; align-items: center; gap: 8px;
+    writing-mode: vertical-rl; padding: 14px 8px 12px 7px; border: 0; border-radius: 0 6px 6px 0; background: var(--red); color: #fff;
+    font: 600 11.5px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; cursor: pointer; box-shadow: 4px 8px 22px rgba(16, 24, 32, .28);
+    transform: translateX(-110%); transition: transform .35s cubic-bezier(.2, .8, .2, 1) .12s, padding-left .2s;
+  }
+  .brand-tab.show { transform: none; }
+  .brand-tab:hover { padding-left: 11px; background: var(--red-deep); }
+  .brand-tab .star { width: 13px; height: 13px; fill: #d1b06b; stroke: none; }
   .crest { grid-row: 2 / span 2; margin-left: 16px; width: 54px; height: 74px; display: grid; place-items: center; }
   .crest img { width: 100%; height: 100%; object-fit: contain; }
   .crest img + svg { display: none; }
@@ -202,7 +217,8 @@
 <canvas id="scene" tabindex="0" aria-label="Model 3D Synerise Arena Kraków – kliknij krzesełko, aby zobaczyć widok z tego miejsca"></canvas>
 
 <div class="hud">
-  <header class="brand panel">
+  <header class="brand panel" id="brand">
+    <button type="button" class="b-fold" id="brandFold" aria-label="Schowaj panel" title="Schowaj panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
     <div class="crest" aria-hidden="true">
       <!-- the club crest saved next to this page as herb.svg is shown here; without it, the neutral star emblem below -->
       <img id="crestImg" src="herb.svg" alt="" onload="document.getElementById('favicon').href=this.src" onerror="this.remove()">
@@ -229,6 +245,7 @@
       <p class="f-msg" id="fMsg" role="status"></p>
     </form>
   </header>
+  <button type="button" class="brand-tab" id="brandTab" aria-controls="brand" aria-hidden="true" tabindex="-1" title="Pokaż panel"><svg class="star" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 20.9l1.6-7L2 9.2l7.1-.6z"/></svg>Wybierz miejsce<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
 
   <aside class="ticket panel" id="ticket" hidden aria-live="polite">
     <div class="t-top">
@@ -1358,6 +1375,21 @@ function speakers(st, n, R) {
   }
 }
 // 4:3 video screens under the roofs of the side stands, centred on the stand
+// the screens show the score: 1 : 0 at 45' when nothing is on, the live score and minute during the match
+const scoreScreens = [];
+function drawScore(g, w, h, { home = 1, away = 0, label = "45'", live = false } = {}) {
+  g.fillStyle = '#05080f'; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#c8102e'; g.fillRect(0, 0, w, 120);
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '600 64px "Inter Tight", Arial, sans-serif'; g.fillText(live ? 'WISŁA – GOŚCIE' : 'WISŁA KRAKÓW', w / 2, 62);
+  g.font = '700 210px "Inter Tight", Arial, sans-serif'; g.fillText(`${home} : ${away}`, w / 2, 300);
+  g.font = '600 52px "Inter Tight", Arial, sans-serif'; g.fillStyle = '#d1b06b'; g.fillText(label, w / 2, 440);
+  const c = document.createElement('canvas'); c.width = 1600; c.height = 200; arenaLogo(c.getContext('2d'), 1600, 200);
+  g.drawImage(c, 40, 500, w - 80, (w - 80) / 8);
+}
+function setScoreScreens(state) {
+  for (const t of scoreScreens) { drawScore(t.image.getContext('2d'), t.image.width, t.image.height, state); t.needsUpdate = true; }
+}
 function videoScreen(st, up, R) {
   // hung from the front of the roof, just behind its edge, on rods from the roof girders (as photographed)
   const L = st.len, top = R - 1.7, sh = 6.0, sw = sh * 4 / 3, o = 1.0;
@@ -1385,16 +1417,8 @@ function videoScreen(st, up, R) {
   }, false);
   const sideMat = new THREE.MeshStandardMaterial({ map: side, emissive: 0xffffff, emissiveMap: side, emissiveIntensity: 0.6 });
   for (const dir of [-1, 1]) plane(st, L / 2 + dir * (sw / 2 + 0.1 + pw / 2), pw, o - 0.02, top - 0.15 - sh / 2, sh, sideMat);
-  const scr = canvasTex(800, 600, (g, w, h) => {
-    g.fillStyle = '#05080f'; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#c8102e'; g.fillRect(0, 0, w, 120);
-    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.font = '600 64px "Inter Tight", Arial, sans-serif'; g.fillText('WISŁA KRAKÓW', w / 2, 62);
-    g.font = '700 210px "Inter Tight", Arial, sans-serif'; g.fillText('1 : 0', w / 2, 300);
-    g.font = '600 52px "Inter Tight", Arial, sans-serif'; g.fillStyle = '#d1b06b'; g.fillText("45'", w / 2, 440);
-    const c = document.createElement('canvas'); c.width = 1600; c.height = 200; arenaLogo(c.getContext('2d'), 1600, 200);
-    g.drawImage(c, 40, 500, w - 80, (w - 80) / 8);
-  }, false);
+  const scr = canvasTex(800, 600, (g, w, h) => drawScore(g, w, h), false);
+  scoreScreens.push(scr);
   plane(st, L / 2, sw, o - 0.02, top - 0.15 - sh / 2, sh, new THREE.MeshStandardMaterial({ map: scr, emissive: 0xffffff, emissiveMap: scr, emissiveIntensity: 0.85 }));
 }
 // LED panels: each segment is [text, [background, ink]]; the sponsor segment 'synerise' is set as its
@@ -3345,7 +3369,7 @@ const match = (() => {
   const kick = (x, z) => sfx(Math.random() < 0.5 ? 'kick1' : 'kick2', 0.9 * vol(x, z), 0.9 + Math.random() * 0.25);
 
   // ---- state ----------------------------------------------------------------------------------
-  let on = false, clock = 0, over = false;
+  let on = false, clock = 0, over = false, screenShown = '';
   const score = { home: 0, away: 0 };
   let carrier = null, flight = null, pause = 0, hold = 0, loose = null, kickoffTeam = 'home';
   const bp = { x: 0, y: R_BALL, z: 0 };
@@ -3384,7 +3408,10 @@ const match = (() => {
 
   function shoot(p) {
     const gk = players.find(q => q.gk && q.team !== p.team), roll = Math.random();
-    const out = roll < 0.2 ? 'goal' : roll < 0.62 ? 'save' : 'wide';
+    // Wisła always wins: the visitors may only pull one back while Wisła stays ahead, and Wisła finishes better
+    // when it is not ahead, the more so late in the match
+    const pGoal = p.team === 'away' ? (score.away + 1 < score.home ? 0.15 : 0) : score.home <= score.away ? (clock > 70 * 60 ? 0.6 : 0.35) : 0.2;
+    const out = roll < pGoal ? 'goal' : roll < pGoal + 0.42 ? 'save' : 'wide';
     const gz = out === 'goal' ? (Math.random() < 0.5 ? -1 : 1) * (1.6 + Math.random() * 1.6) : out === 'save' ? THREE.MathUtils.clamp(gk.z + (Math.random() - 0.5) * 2.4, -3.2, 3.2) : (Math.random() < 0.5 ? -1 : 1) * (4.6 + Math.random() * 3);
     const gx = goalX(p), d = Math.hypot(gx - bp.x, gz - bp.z);
     flight = { kind: 'shot', out, from: p, gk, x0: bp.x, z0: bp.z, x1: out === 'save' ? gx - p.dir * 1.4 : gx, z1: gz, t: 0, dur: Math.max(0.35, d / 25), h: out === 'goal' ? 0.6 + Math.random() * 1.2 : out === 'wide' ? 1 + Math.random() * 3 : 0.4 };
@@ -3416,11 +3443,14 @@ const match = (() => {
   function tick(dt) {
     if (!on) return;
     if (!over) clock += dt * SIM_SPEED;
-    if (!over && clock >= 90 * 60) {
+    if (!over && clock >= 90 * 60 && score.home > score.away) {   // (with Wisła not ahead, stoppage time runs on)
       over = true; sfx('whistle', 0.8); setTimeout(() => sfx('whistle', 0.8), 700); el.ambient.volume = 0.2;
       const w = score.home === score.away ? 'Remis' : score.home > score.away ? 'Wygrywa Wisła' : 'Wygrywają Goście'; $('sT').textContent = 'Koniec · ' + w;
     }
-    const mm = Math.min(90, Math.floor(clock / 60)); if (!over) $('sT').textContent = mm + "'";
+    const mm = Math.floor(clock / 60), label = over ? 'KONIEC' : mm >= 90 ? `90+${mm - 89}'` : mm + "'";
+    if (!over) $('sT').textContent = label;
+    const shown = `${score.home}:${score.away} ${label}`;
+    if (shown !== screenShown) { screenShown = shown; setScoreScreens({ home: score.home, away: score.away, label, live: true }); }
     if (pause > 0) pause -= dt;
 
     // the ball
@@ -3499,10 +3529,23 @@ const match = (() => {
     $('score').hidden = false; root.visible = true; kickoffTeam = 'home'; reset('home');
     el.ambient.volume = 0.42; el.ambient.currentTime = 0; el.ambient.play().catch(() => {});
   }
-  function stop() { on = false; root.visible = false; $('score').hidden = true; el.ambient.pause(); }
+  function stop() { on = false; root.visible = false; $('score').hidden = true; el.ambient.pause(); screenShown = ''; setScoreScreens(); }
   return { tick, start, stop, get on() { return on; },
     debug: () => ({ clock: Math.round(clock), score: { ...score }, carrier: carrier ? carrier.team + '#' + carrier.idx : null, flight: flight ? flight.kind : null, ball: [+bp.x.toFixed(1), +bp.z.toFixed(1)], players: players.map(p => [+p.x.toFixed(1), +p.z.toFixed(1)]), officials: officials.map(o => [+o.x.toFixed(1), +o.z.toFixed(1)]) }) };
 })();
+// fold the title card away, and pull it back out by its tab (remembered on this device)
+{
+  const brand = $('brand'), tab = $('brandTab');
+  const fold = (f, focus) => {
+    brand.classList.toggle('folded', f); brand.inert = f;
+    tab.classList.toggle('show', f); tab.setAttribute('aria-hidden', String(!f)); tab.tabIndex = f ? 0 : -1;
+    if (focus) (f ? tab : $('brandFold')).focus();
+    try { localStorage.setItem('brandFolded', f ? '1' : '0'); } catch { /* storage unavailable */ }
+  };
+  $('brandFold').addEventListener('click', () => fold(true, true));
+  tab.addEventListener('click', () => fold(false, true));
+  try { if (localStorage.getItem('brandFolded') === '1') fold(true); } catch { /* storage unavailable */ }
+}
 toggle('btnMatch', on => { $('btnMatch').textContent = on ? 'Wyłącz mecz' : 'Włącz mecz'; on ? match.start() : match.stop(); });
 
 
