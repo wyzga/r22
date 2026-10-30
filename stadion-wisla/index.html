@@ -2388,24 +2388,32 @@ function hideFanAt(sec, idx) {
   fans.instanceMatrix.needsUpdate = true;
 }
 
-// Flags on C, the home end (as photographed): now and then fans there raise big flags striped across red, white,
-// blue, white, red and wave them, swinging the pole from side to side. A flag shows only while its fan is in the
-// stand (the occupancy slider), for a while, then goes down again.
+// Flags on C, the home end (as photographed): now and then fans there raise big flags and wave them, swinging the
+// pole from side to side. Half are striped across red, white, blue, white, red; a quarter blue, white, red; a
+// quarter red with a white star in the middle. A flag shows only while its fan is in the stand (the occupancy
+// slider), for a while, then goes down again.
 const flags = (() => {
   const r = rng(3812), own = [];
   for (const sec of sectors) if (sec.st.id === 'C') sec.seats.forEach((s, i) => {
-    if (r() < 0.035) own.push({ k: fanIndex.get(sec.name + '|' + i), ph: r() * 6.3, per: 16 + r() * 20, off: r(), w: 2.4 + r() * 1.2 });
+    if (r() < 0.035) { const d = r(); own.push({ k: fanIndex.get(sec.name + '|' + i), ph: r() * 6.3, per: 16 + r() * 20, off: r(), w: 2.4 + r() * 1.2, d: d < 0.5 ? 0 : d < 0.75 ? 1 : 2 }); }
   });
-  const stripes = canvasTex(8, 128, (g, w, h) => {
-    let y = 0;
-    for (const [c, f] of [['#d81e36', 0.3], ['#ffffff', 0.12], ['#1d3f95', 0.16], ['#ffffff', 0.12], ['#d81e36', 0.3]]) { g.fillStyle = c; g.fillRect(0, y, w, f * h + 1); y += f * h; }
+  // the three designs side by side, each 1.5 : 1 like the cloth (aDesign picks one)
+  const designs = canvasTex(576, 128, (g, w, h) => {
+    const cw = w / 3, bands = (x, list) => { let y = 0; for (const [c, f] of list) { g.fillStyle = c; g.fillRect(x, y, cw, f * h + 1); y += f * h; } };
+    bands(0, [['#d81e36', 0.3], ['#ffffff', 0.12], ['#1d3f95', 0.16], ['#ffffff', 0.12], ['#d81e36', 0.3]]);
+    bands(cw, [['#1d3f95', 1 / 3], ['#ffffff', 1 / 3], ['#d81e36', 1 / 3]]);
+    g.fillStyle = '#d81e36'; g.fillRect(2 * cw, 0, cw, h);
+    g.fillStyle = '#ffffff'; g.beginPath();
+    for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? 17 : 44; g.lineTo(2.5 * cw + Math.cos(a) * rr, h / 2 + 4 + Math.sin(a) * rr); }
+    g.closePath(); g.fill();
   }, false);
   const uTime = { value: 0 };
-  const cloth = new THREE.MeshStandardMaterial({ map: stripes, side: THREE.DoubleSide, roughness: 0.85 });
+  const cloth = new THREE.MeshStandardMaterial({ map: designs, side: THREE.DoubleSide, roughness: 0.85 });
   // the cloth ripples, more the further it is from the pole, and droops a little at its free end
   cloth.onBeforeCompile = sh => {
     sh.uniforms.uTime = uTime;
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;\nattribute float aPhase;')
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;\nattribute float aPhase;\nattribute float aDesign;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv.x = (vMapUv.x + aDesign) / 3.0;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         float fx = transformed.x / 1.8;
         transformed.z += sin(transformed.x * 4.2 - uTime * 7.0 + aPhase) * 0.16 * fx;
@@ -2413,6 +2421,7 @@ const flags = (() => {
   };
   const POLE = 2.7, clothGeo = new THREE.PlaneGeometry(1.8, 1.2, 14, 1).translate(0.9, POLE - 0.6, 0);
   clothGeo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(new Float32Array(own.map(f => f.ph)), 1));
+  clothGeo.setAttribute('aDesign', new THREE.InstancedBufferAttribute(new Float32Array(own.map(f => f.d)), 1));
   const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.018, 0.018, POLE, 5).translate(0, POLE / 2, 0), new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.6 }), own.length);
   const cloths = new THREE.InstancedMesh(clothGeo, cloth, own.length);
   for (const m of [poles, cloths]) { m.frustumCulled = false; m.castShadow = true; scene.add(m); }
