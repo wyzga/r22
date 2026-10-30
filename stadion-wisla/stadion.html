@@ -341,12 +341,19 @@ for (const st of STANDS) {
 }
 // ends of a corner row at depth o
 const rowS0 = (st, o) => -st.a0 - st.e * o, rowS1 = (st, o) => st.len + st.a1 + st.e * o;
-// The lower tier of a corner stops PASS short of the goal-end stand: the gap is an open passage at ground level
-// (for ambulances), from the pitch out through the corner building, under the upper tier. tierS0 / tierS1: the
-// ends of a row of tier key, the passage left out.
+// The lower tier of a corner leaves an open passage at ground level (for ambulances) beside the goal-end stand:
+// beyond that stand's front line and within PASS of its end, from the pitch out through the corner building, under
+// the upper tier. tierS0 / tierS1: the ends of a row of tier key, the passage left out.
 const PASS = 4.5, PASS_H = 4.8;
-const tierS0 = (st, key, o) => rowS0(st, o) + (key === 'lower' && st.endS0 ? PASS : 0);
-const tierS1 = (st, key, o) => rowS1(st, o) - (key === 'lower' && !st.endS0 ? PASS : 0);
+function passS(st, o) {
+  // where the row at depth o enters the passage (the first point, coming from the side stand, inside it)
+  const inside = s => { const p = W(st, s, o, 0); return p.x * st.sx >= 61.5 - 1e-6 && p.z * st.sz <= GOAL_HALF + PASS; };
+  let a = st.endS0 ? rowS1(st, o) : rowS0(st, o), b = st.endS0 ? rowS0(st, o) : rowS1(st, o);
+  for (let i = 0; i < 40; i++) { const m = (a + b) / 2; if (inside(m)) b = m; else a = m; }
+  return b;
+}
+const tierS0 = (st, key, o) => key === 'lower' && st.endS0 ? passS(st, o) : rowS0(st, o);
+const tierS1 = (st, key, o) => key === 'lower' && !st.endS0 ? passS(st, o) : rowS1(st, o);
 const W = (st, s, o, y) => {
   if (st.segA) {
     const b = TAU * o;
@@ -481,6 +488,16 @@ function fitRow(ps, a, b, m) {
       }
       return { c: o => mc + k * (o - mo), h, rows: [g.r0, g.r1] };
     }).sort((p, q) => p.c(tierMid) - q.c(tierMid));   // (in order at mid-depth: on a corner they drift apart with depth)
+    // the corners' lower tiers: the plan leaves their front rows nearly empty, and an exit opens there as on the other
+    // lower tiers, halfway between the side stand and the passage (rows from the first without seats to the last
+    // with at most four)
+    if (st.fan && key === 'lower') {
+      const cnt = r => (rows.get(r) || []).length;
+      let v0 = 0; while (v0 < t.rows && cnt(v0)) v0++;
+      let v1 = v0; while (v1 + 1 < t.rows && cnt(v1 + 1) <= 4) v1++;
+      const oM = rowDepth(t, (v0 + v1) / 2), c = (tierS0(st, key, oM) + tierS1(st, key, oM)) / 2;
+      if (v1 > v0 && v1 + 1 < t.rows) st.exits.lower.push({ c: () => c, h: 1.7, rows: [v0, v1] });
+    }
     // the players' tunnel: the gap under the front rows of the main stand
     if (st.kind === 'main' && key === 'lower') {
       const i = st.exits.lower.findIndex(e => e.rows[0] === 0);
@@ -499,12 +516,20 @@ function fitRow(ps, a, b, m) {
     // lower tiers, the cross aisle of the upper ones): open steps, railed off along the seats' edge
     if (st.fan) {
       const edges = [[], []];
+      const step = (r, a, b) => {   // (cut round the recess of an exit in that row)
+        let spans = [[a, b]];
+        for (const e of st.exits[key]) if (r >= e.rows[0] && r <= e.rows[1]) {
+          const o = rowDepth(t, r), c0 = e.c(o) - e.h, c1 = e.c(o) + e.h;
+          spans = spans.flatMap(([x, y]) => [[x, Math.min(y, c0)], [Math.max(x, c1), y]]).filter(([x, y]) => y - x > 0.2);
+        }
+        for (const [x, y] of spans) st.steps[key].push([r, x, y]);
+      };
       for (let r = 0; r < t.rows; r++) {
         const o = rowDepth(t, r), a = tierS0(st, key, o), b = tierS1(st, key, o), ps = rows.get(r);
-        if (!ps) { st.steps[key].push([r, a, b]); continue; }
+        if (!ps) { step(r, a, b); continue; }
         const s0 = ps[0].s - 0.5, s1 = ps[ps.length - 1].s + 0.5;
-        if (s0 - a > 1.2) { st.steps[key].push([r, a, s0]); edges[0].push([r, s0]); }
-        if (b - s1 > 1.2) { st.steps[key].push([r, s1, b]); edges[1].push([r, s1]); }
+        if (s0 - a > 1.2) { step(r, a, s0); edges[0].push([r, s0]); }
+        if (b - s1 > 1.2) { step(r, s1, b); edges[1].push([r, s1]); }
       }
       st.stepRails[key] = edges;
     }
@@ -525,6 +550,33 @@ function fitRow(ps, a, b, m) {
     // stairs running up the back of the tier (the skybox balcony behind leaves them clear)
     const back = Math.max(...st.stairs[key].map(g => g[0]));
     st.aisleS[key] = st.stairs[key].filter(g => g[0] === back).map(([, a, b]) => (a + b) / 2);
+  }
+  // A corner's upper structure (the upper tier, the walkway and skybox balcony, the building under them) ends just
+  // past its last seat towards the goal-end stand, leaving an open gap beside that stand: edgeU(o), between the
+  // rows' last seats (and the balcony's, over its depth)
+  for (const st of STANDS) {
+    if (!st.fan) continue;
+    const g = st.endS0 ? -1 : 1;
+    const lastSeats = (key, t) => {
+      const by = new Map();
+      for (const p of st.placed[key] || []) by.set(p.r, Math.max(by.get(p.r) ?? -Infinity, g * p.s + 0.7));
+      return [...by].map(([r, v]) => [rowDepth(t, r), v]).sort((a, b) => a[0] - b[0]);
+    };
+    const lerp = (pts, o) => {
+      if (o <= pts[0][0]) return pts[0][1];
+      for (let i = 1; i < pts.length; i++) if (o <= pts[i][0]) { const [o0, v0] = pts[i - 1], [o1, v1] = pts[i]; return v0 + (v1 - v0) * (o - o0) / (o1 - o0); }
+      return pts[pts.length - 1][1];
+    };
+    const up = lastSeats('upper', st.tiers.upper), box = st.boxTier ? lastSeats('box', st.boxTier) : [];
+    st.edgeU = o => {
+      let v = lerp(up, o);
+      if (box.length && o <= box[box.length - 1][0] + 0.5) v = Math.max(v, lerp(box, o));
+      return g > 0 ? Math.min(g * v, rowS1(st, o)) : Math.max(g * v, rowS0(st, o));
+    };
+    // (the open steps of the upper tier stop there too)
+    const tu = st.tiers.upper;
+    st.steps.upper = st.steps.upper.map(([r, a, b]) => { const e = st.edgeU(rowDepth(tu, r)); return g > 0 ? [r, a, Math.min(b, e)] : [r, Math.max(a, e), b]; })
+      .filter(([, a, b]) => b - a > 0.2);
   }
 }
 
@@ -692,9 +744,18 @@ function fanSolid(st, pts, mat, opt = {}) {
       pos.push(...A(j), ...B(j), ...B(k), ...A(j), ...B(k), ...A(k));
     }
   }
-  const A = j => at(sA, j), B = j => at(sB, j);
-  for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(pa.map(p => new THREE.Vector2(p[0], p[1])), [])) pos.push(...A(i), ...A(j), ...A(k));
-  for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(pb.map(p => new THREE.Vector2(p[0], p[1])), [])) pos.push(...B(i), ...B(k), ...B(j));
+  // end caps: an upright wall from the profile down to its closing edge (last point back to the first), so the cap
+  // stays upright where the slice's edge bends; a profile closed at one depth is triangulated
+  const cap = (f, pp, flip) => {
+    const F = j => at(f, j), [o0, y0] = pp[0], [o1, y1] = pp[m - 1];
+    if (Math.abs(o1 - o0) < 0.01) {
+      for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(pp.map(p => new THREE.Vector2(p[0], p[1])), [])) pos.push(...F(i), ...(flip ? F(k) : F(j)), ...(flip ? F(j) : F(k)));
+      return;
+    }
+    const D = j => { const o = pp[j][0]; return W(st, f(o), o, y0 + (y1 - y0) * (o - o0) / (o1 - o0)).toArray(); };
+    for (let j = 0; j + 1 < m; j++) pos.push(...F(j), ...F(j + 1), ...D(j + 1), ...F(j), ...D(j + 1), ...D(j), ...F(j), ...D(j + 1), ...F(j + 1), ...F(j), ...D(j), ...D(j + 1));
+  };
+  cap(sA, pa, false); cap(sB, pb, true);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.computeVertexNormals();
@@ -1037,14 +1098,16 @@ for (const st of STANDS) {
       // the raised goal-end edge (rowLift) belongs to the slice at that end
       const t = T[key], prof = tierProfile(t, key), ex = st.exits[key], endPts = t.rEnd ? tierProfile(t, key, r => rowLift(t, r)) : null;
       // (each edge kept at or past the one before, so exits one above the other never fold a slice back)
-      let from = o => tierS0(st, key, o);
+      // (the upper tier ends at edgeU towards the goal-end stand)
+      const b0 = key === 'upper' && st.endS0 ? st.edgeU : o => tierS0(st, key, o), b1 = key === 'upper' && !st.endS0 ? st.edgeU : o => tierS1(st, key, o);
+      let from = b0;
       ex.forEach(({ c, h, rows }, i) => {
         const prev = from, a = o => Math.max(prev(o), c(o) - h), b = o => Math.max(a(o), c(o) + h);
         standMeshes.push(fanSolid(st, prof, concrete, { cast: true, sA: prev, sB: a, endPts: i === 0 && st.endS0 ? endPts : null }));
         standMeshes.push(fanSolid(st, recessProfile(t, key, rows), concrete, { cast: true, sA: a, sB: b }));
         from = b;
       });
-      standMeshes.push(fanSolid(st, prof, concrete, { cast: true, sA: from, sB: o => tierS1(st, key, o), endPts: !st.endS0 || !ex.length ? endPts : null }));
+      standMeshes.push(fanSolid(st, prof, concrete, { cast: true, sA: from, sB: b1, endPts: !st.endS0 || !ex.length ? endPts : null }));
     }
     // the passage: the lower tier ends in a stepped wall, railed along its top (teal posts and rail, glass infill);
     // the building over it is cut to a portal PASS_H high
@@ -1062,35 +1125,38 @@ for (const st of STANDS) {
       }
       instancedMembers(rm, steelBlue, false);
     }
-    // a profile swept over the corner with the passage left out below PASS_H (two pieces: beside it and over it)
-    const overPassage = (pts, mat, opt = {}) => {
-      const beside = st.endS0 ? { sA: pEdge } : { sB: pEdge }, over = st.endS0 ? { sB: pEdge } : { sA: pEdge };
+    // a profile of the upper structure swept over the corner up to edgeU, with the passage left out below PASS_H
+    // (two pieces: beside the passage and over it)
+    const near = st.endS0 ? o => Math.max(st.edgeU(o), pEdge(o)) : o => Math.min(st.edgeU(o), pEdge(o));
+    const cornerPiece = (pts, mat, opt = {}) => {
+      const beside = st.endS0 ? { sA: near } : { sB: near }, over = st.endS0 ? { sA: st.edgeU, sB: near } : { sA: near, sB: st.edgeU };
       const m = fanSolid(st, pts, mat, { ...opt, ...beside });
       fanSolid(st, pts.map(([o, y]) => [o, Math.max(y, PASS_H)]), mat, { ...opt, ...over });
       return m;
     };
     // walkway behind the lower tier; in corner B the skybox balcony (SK23–SK25) with its four low steps
     const bt = st.boxTier, gO = bt ? bt.o0 + bt.rows * bt.d : loEnd + 1.15, yF = tierTop(lo);
-    overPassage([[gO + 0.15, 0], [gO + 0.15, up.y0 - 1.4], [upEnd, tierTop(up) - 1.8], [upEnd, 0]], coreMat);
-    fanSolid(st, [[loEnd, yF - 0.15], [gO, yF - 0.15], [gO, yF], [loEnd, yF]], coreMat);
-    if (bt) for (let i = 0; i < bt.rows; i++) fanSolid(st, [[bt.o0 + i * bt.d, yF], [gO, yF], [gO, bt.y0 + i * bt.r], [bt.o0 + i * bt.d, bt.y0 + i * bt.r]], coreMat);
-    standMeshes.push(fanSolid(st, [[gO, yF], [gO + 0.15, yF], [gO + 0.15, up.y0 - 0.5], [gO, up.y0 - 0.5]], skyGlass));
+    cornerPiece([[gO + 0.15, 0], [gO + 0.15, up.y0 - 1.4], [upEnd, tierTop(up) - 1.8], [upEnd, 0]], coreMat);
+    cornerPiece([[loEnd, yF - 0.15], [gO, yF - 0.15], [gO, yF], [loEnd, yF]], coreMat);
+    if (bt) for (let i = 0; i < bt.rows; i++) cornerPiece([[bt.o0 + i * bt.d, yF], [gO, yF], [gO, bt.y0 + i * bt.r], [bt.o0 + i * bt.d, bt.y0 + i * bt.r]], coreMat);
+    standMeshes.push(cornerPiece([[gO, yF], [gO + 0.15, yF], [gO + 0.15, up.y0 - 0.5], [gO, up.y0 - 0.5]], skyGlass));
     const fTop = tierTop(up) + 1.3;
-    overPassage([[upEnd, 0], [upEnd, fTop], [st.back, fTop], [st.back, 0]], blackGlass, { cast: true });
-    fanSolid(st, [[st.back, 7.2], [st.back + 0.35, 7.2], [st.back + 0.35, 8.4], [st.back, 8.4]], whiteBand);
-    fanSolid(st, [[st.back, 15.5], [st.back + 0.35, 15.5], [st.back + 0.35, 16.1], [st.back, 16.1]], whiteBand);
+    cornerPiece([[upEnd, 0], [upEnd, fTop], [st.back, fTop], [st.back, 0]], blackGlass, { cast: true });
+    cornerPiece([[st.back, 7.2], [st.back + 0.35, 7.2], [st.back + 0.35, 8.4], [st.back, 8.4]], whiteBand);
+    cornerPiece([[st.back, 15.5], [st.back + 0.35, 15.5], [st.back + 0.35, 16.1], [st.back, 16.1]], whiteBand);
     // band on the front of the upper tier, continuing the side stand's: red like stand E's LED fascia, grey
     // bare concrete next to the main stand
-    fanSolid(st, [[up.o0 - 0.06, up.y0 - 1.4], [up.o0, up.y0 - 1.4], [up.o0, up.y0], [up.o0 - 0.06, up.y0]],
+    cornerPiece([[up.o0 - 0.06, up.y0 - 1.4], [up.o0, up.y0 - 1.4], [up.o0, up.y0], [up.o0 - 0.06, up.y0]],
       st.id === 'B' ? new THREE.MeshStandardMaterial({ color: 0xa9adb3, roughness: 0.9 }) : new THREE.MeshStandardMaterial({ color: 0xa83c4c, emissive: 0x2a0c12, roughness: 0.6 }));
-    fanSolid(st, [[st.back, fTop - 1.4], [st.back + 0.35, fTop - 1.4], [st.back + 0.35, fTop], [st.back, fTop]], whiteBand);
+    cornerPiece([[st.back, fTop - 1.4], [st.back + 0.35, fTop - 1.4], [st.back + 0.35, fTop], [st.back, fTop]], whiteBand);
     // building filling the corner out to the rectangle formed by the back lines of the neighbouring stands
     // (the corner's back runs along the side stand's back line, diagonally, then 3 m short of the goal-end stand's)
     const ob = st.back, xz = p => [p.x, p.z];
     const ends = [W(st, rowS0(st, ob), ob, 0), W(st, rowS1(st, ob), ob, 0)], bends = [W(st, -TAU * ob, ob, 0), W(st, st.len + TAU * ob, ob, 0)];
     const [g, sd] = st.endS0 ? [0, 1] : [1, 0], zB = st.sz * (41.5 + st.sideBack), xB = st.sx * (61.5 + st.endBack);
-    // (leaving the passage open along the goal-end stand's end)
-    cornerFill([xz(bends[sd]), [xB, zB], [xB, st.sz * (GOAL_HALF + PASS)], [ends[g].x, st.sz * (GOAL_HALF + PASS)], xz(bends[g])], fTop);
+    // (up to where the corner building ends, leaving the gap beside the goal-end stand open)
+    const sEnd = near(ob), pEnd = W(st, sEnd, ob, 0), inGoalRun = st.endS0 ? sEnd < -TAU * ob : sEnd > st.len + TAU * ob;
+    cornerFill([xz(bends[sd]), [xB, zB], [xB, pEnd.z], xz(pEnd), ...(inGoalRun ? [xz(bends[g])] : [])], fTop);
     continue;
   }
   // each tier is extruded in pieces: the full profile, cut where an exit opens off a stair (the recess) and,
