@@ -1902,7 +1902,8 @@ instancedMembers(members.cable, cableMat, false);
 // round media pavilion ("okrąglak") in corner H, between the main stand and stand G
 // as photographed: a concrete plinth filling the corner, its front on the corner's diagonal with a glazed
 // entrance in blue-green frames, and on it a drum of blue reflective glass panels in a dark mullion grid
-// (the staircase inside showing through on the main-stand side), finished with a dark coping
+// (the staircase inside showing through on the main-stand side); since the rebuild its top is a crown of black
+// ribbed panels between two white bands
 {
   const cx = -66, cz = -48, cyl = (r, h, y, mat, cast, open = false) => { const m = add(new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 72, 1, open), mat), { cast }); m.position.set(cx, y, cz); return m; };
   const u = new THREE.Vector3(Math.SQRT1_2, 0, Math.SQRT1_2), v = new THREE.Vector3(Math.SQRT1_2, 0, -Math.SQRT1_2);   // towards the pitch / along the front
@@ -1964,25 +1965,39 @@ instancedMembers(members.cable, cableMat, false);
   }
   const rm = []; for (const [p, q] of rails) member(rm, p, q, 0.05);
   instancedMembers(rm, blue, false);
-  // the glass drum
-  const R = 10, top = H + 12, rnd = rng(7);
+  // the drum, as rebuilt: blue glass in its lower 7 m, then a white band, a crown of black panels ribbed
+  // horizontally (24 flat panels round), and a white coping on top
+  const R = 10, top = H + 12, yG = H + 7, rnd = rng(7);
   const drum = canvasTex(2048, 512, (c, w, h) => {
-    const cols = 48, rows = 10, cw = w / cols, rh = h / rows, shades = ['#3f78c0', '#4a84cc', '#3a70b8', '#5590d4', '#3466a8', '#669fdb'];
+    // pale grey-blue glass mirroring the sky, the bottom row darker (spandrel panels)
+    const cols = 48, rows = 7, cw = w / cols, rh = h / rows, shades = ['#8ea2bb', '#9db0c6', '#8195ae', '#a8bacd', '#8a9bb3', '#b2c1d3'],
+      low = ['#3d4756', '#465161', '#38414e'];
     for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
-      const gr = c.createLinearGradient(0, j * rh, 0, (j + 1) * rh);
-      gr.addColorStop(0, shades[Math.floor(rnd() * shades.length)]); gr.addColorStop(1, shades[Math.floor(rnd() * shades.length)]);
+      const gr = c.createLinearGradient(0, j * rh, 0, (j + 1) * rh), sh = j === rows - 1 ? low : shades;
+      gr.addColorStop(0, sh[Math.floor(rnd() * sh.length)]); gr.addColorStop(1, sh[Math.floor(rnd() * sh.length)]);
       c.fillStyle = gr; c.fillRect(i * cw, j * rh, cw, rh);
     }
     // staircase behind the glass, towards the main stand (drum angle ~75°: u ≈ 0.21)
     c.fillStyle = 'rgba(214,220,226,0.85)';
-    for (let j = 0; j < 9; j++) { const x0 = 9.4 * cw + (j % 2 ? 1 : 0) * cw * 0.9; c.fillRect(x0, (j + 0.8) * rh, cw * 1.4, rh * 0.22); c.fillRect(x0 + cw * 0.4 * (j % 2 ? -1 : 1), (j + 0.4) * rh, cw * 0.18, rh * 0.6); }
-    c.fillStyle = '#1a2c46';
+    for (let j = 0; j < rows - 1; j++) { const x0 = 9.4 * cw + (j % 2 ? 1 : 0) * cw * 0.9; c.fillRect(x0, (j + 0.8) * rh, cw * 1.4, rh * 0.22); c.fillRect(x0 + cw * 0.4 * (j % 2 ? -1 : 1), (j + 0.4) * rh, cw * 0.18, rh * 0.6); }
+    c.fillStyle = '#2a3038';
     for (let i = 0; i <= cols; i++) c.fillRect(i * cw - 2, 0, 4, h);
     for (let j = 0; j <= rows; j++) c.fillRect(0, j * rh - 3, w, 6);
   });
-  cyl(R, top - H, (H + top) / 2, new THREE.MeshStandardMaterial({ map: drum, roughness: 0.15, metalness: 0.2, emissive: 0xffffff, emissiveMap: drum, emissiveIntensity: 0.22 }), true, true);
+  cyl(R, yG - H, (H + yG) / 2, new THREE.MeshStandardMaterial({ map: drum, roughness: 0.15, metalness: 0.2, emissive: 0xffffff, emissiveMap: drum, emissiveIntensity: 0.22 }), true, true);
+  // one black panel per face: fine horizontal ribs, a darker joint at either edge
+  const ribs = canvasTex(128, 256, (c, w, h) => {
+    c.fillStyle = '#34373c'; c.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 6) { c.fillStyle = '#5a5e65'; c.fillRect(0, y, w, 2); c.fillStyle = '#16181b'; c.fillRect(0, y + 4, w, 2); }
+    c.fillStyle = '#0b0c0e'; c.fillRect(0, 0, 3, h); c.fillRect(w - 3, 0, 3, h);
+  });
+  ribs.repeat.set(24, 1);
+  const yW = yG + 0.6, yC = top - 0.6;
+  const crown = add(new THREE.Mesh(new THREE.CylinderGeometry(R + 0.1, R + 0.1, yC - yW, 24, 1, true), new THREE.MeshStandardMaterial({ map: ribs, roughness: 0.6, metalness: 0.1, flatShading: true })), { cast: true });
+  crown.position.set(cx, (yW + yC) / 2, cz);
+  cyl(R + 0.35, yW - yG, (yG + yW) / 2, whiteBand, true);   // the white band between glass and panels
+  cyl(R + 0.4, top - yC, (yC + top) / 2, whiteBand, true);  // the white coping
   cyl(R - 0.3, 0.3, top - 0.15, coreMat);
-  cyl(R + 0.15, 0.9, top + 0.25, new THREE.MeshStandardMaterial({ color: 0x2a3038, roughness: 0.7 }), true);
   cyl(R + 0.1, 0.3, H + 0.15, new THREE.MeshStandardMaterial({ color: 0x2a3038, roughness: 0.7 }));
 }
 
