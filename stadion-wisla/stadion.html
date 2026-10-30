@@ -2311,7 +2311,7 @@ for (const sec of sectors) {
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
   const rowKeys = [...sec.rows.keys()], midRow = sec.rows.get(rowKeys[Math.floor(rowKeys.length / 2)]);
   const s = sec.seats[midRow[Math.floor(midRow.length / 2)]];
-  const h = 2.2;
+  const h = 1.6;
   sp.position.set(s.x, s.y + 2.6, s.z); sp.scale.set(h * c.width / H, h, 1);
   labelGroup.add(sp);
 }
