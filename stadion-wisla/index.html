@@ -462,8 +462,8 @@ function fitRow(ps, a, b, m) {
     const groups = [];
     for (const [r, a, b] of cand) {
       const g = groups.find(g => g.r1 === r - 1 && Math.min(b, g.b) - Math.max(a, g.a) > 0.5 * Math.min(b - a, g.b - g.a));
-      if (g) Object.assign(g, { r1: r, a, b }).pts.push([rowDepth(t, r), (a + b) / 2, b - a]);
-      else groups.push({ r0: r, r1: r, a, b, pts: [[rowDepth(t, r), (a + b) / 2, b - a]] });
+      if (g) Object.assign(g, { r1: r, a, b }).pts.push([rowDepth(t, r), (a + b) / 2, b - a, r]);
+      else groups.push({ r0: r, r1: r, a, b, pts: [[rowDepth(t, r), (a + b) / 2, b - a, r]] });
     }
     // (the lower corner tiers have none: their gaps are the open steps by the diagonal entrance stair)
     const tierMid = t.o0 + t.rows * t.d / 2;
@@ -472,7 +472,14 @@ function fitRow(ps, a, b, m) {
       const n = g.pts.length, mo = g.pts.reduce((a, p) => a + p[0], 0) / n, mc = g.pts.reduce((a, p) => a + p[1], 0) / n;
       const v = g.pts.reduce((a, p) => a + (p[0] - mo) ** 2, 0);
       const k = st.fan && v ? g.pts.reduce((a, p) => a + (p[0] - mo) * (p[1] - mc), 0) / v : 0;
-      return { c: o => mc + k * (o - mo), h: Math.max(1.0, Math.min(...g.pts.map(p => p[2])) / 2), rows: [g.r0, g.r1] };
+      let h = Math.max(1.0, Math.min(...g.pts.map(p => p[2])) / 2);
+      // behind the goals (as photographed at G3) the exit is narrower than the gap: a stair two seats wide runs up
+      // either side of it, outside its railings
+      if (st.tiers.single && h - 2 * pitch >= 0.8) {
+        h -= 2 * pitch;
+        for (const [, m, wd, r] of g.pts) st.stairs[key].push([r, m - wd / 2, mc - h], [r, mc + h, m + wd / 2]);
+      }
+      return { c: o => mc + k * (o - mo), h, rows: [g.r0, g.r1] };
     }).sort((p, q) => p.c(tierMid) - q.c(tierMid));   // (in order at mid-depth: on a corner they drift apart with depth)
     // the players' tunnel: the gap under the front rows of the main stand
     if (st.kind === 'main' && key === 'lower') {
@@ -1640,7 +1647,7 @@ function seatColor(st, key, name, s, r) {
       const t = st.tiers[key], rails = [];
       for (const { c, h, rows: [v0, v1] } of list) {
         const oB = t.o0 + (v1 + 1) * t.d, yA = t.y0 + v0 * t.r, yT = t.y0 + Math.min(v1 + 1, t.rows - 1) * t.r;
-        const dH = Math.max(1.6, Math.min(2.2, yT - yA - 0.35)), dW = Math.min(2.0, 2 * h - 1.0), sb = c(oB);
+        const dH = Math.max(1.6, Math.min(2.2, yT - yA - 0.35)), dW = Math.min(2.0, 2 * h - 0.4), sb = c(oB);
         // doors: dark glass in a light frame, split in two leaves
         plane(st, sb, dW, oB - 0.02, yA + dH / 2, dH, doorGlassMat);
         for (const e of [-dW / 2, 0, dW / 2]) boxL(st, sb + e - 0.05, sb + e + 0.05, oB - 0.06, oB, yA, yA + dH, doorFrameMat);

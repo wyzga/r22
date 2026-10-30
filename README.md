@@ -31,6 +31,7 @@ Otwórz `stadion-wisla/index.html` w przeglądarce. To samodzielna kopia z wbudo
 - Każde krzesełko pochodzi z planu miejsc klubu, z prawdziwym sektorem, rzędem i numerem: 32 320 na trybunach i 938 na balkonie przed skyboxami między poziomami (skyboxy SK01–SK34 po 4 rzędy, loża prezydencka, balkony na E), razem 33 258. Z 241 stanowiskami trybuny prasowej to 33 499, tyle co w planie.
 - Liczby rzędów jak w planie: G 32, C 33, poziomy dolne 18 (narożniki D i F 22), górne: A/H 21, E 25, narożniki B/D/F 25.
 - Schody, wyjścia, tunel dla piłkarzy i trybuna prasowa są tam, gdzie plan zostawia przerwy w rzędach: 2–5 brakujących miejsc to schody, większa przerwa przez co najmniej trzy rzędy to wyjście.
+- Na G i C wyjście jest węższe niż przerwa w planie, jak na zdjęciu G3: po obu stronach, za barierkami, biegną w górę schody szerokie na dwa krzesełka.
 - Trybuny za bramkami są szerokie jak w planie: C ma 80 m, G 73,5 m (od strony pawilonu kończy się wcześniej).
 - Narożniki wypełniają kwadrat między trybuną boczną a trybuną za bramką: rzędy biegną dalej wzdłuż trybuny bocznej, skręcają o 45° w przekątną i jeszcze raz wzdłuż trybuny za bramką, a bloki dzielą schody i wyjścia. Tam, gdzie plan nie ma krzesełek na końcach rzędów (wejście z przodu dolnego poziomu, przejście w górnym), są schody odgrodzone barierkami.
 - Plan jest schematyczny. Na prostych trybunach siatka miejsc jest rozciągnięta na długość trybuny. W narożnikach każde miejsce zachowuje swoje położenie na długości swojego załamanego rzędu.
