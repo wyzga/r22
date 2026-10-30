@@ -1278,6 +1278,12 @@ function arenaLogo(g, w, h, ink = '#ffffff') {
 // loudspeakers under a stand's roof, as photographed: n black boxes evenly along the stand, hung on rods a few
 // metres in from the roof's front edge (eight under each side stand's roof, five under each goal-end stand's)
 const speakerMat = new THREE.MeshStandardMaterial({ color: 0x15171b, roughness: 0.7, metalness: 0.2 });
+// lamps under a roof over the top rows, every few metres from s0 to s1: small fittings, lit in the night view
+const standLampMat = new THREE.MeshStandardMaterial({ color: 0xd9dde2, roughness: 0.4, emissive: 0xfff4e0, emissiveIntensity: 0 });
+function standLamps(st, s0, s1, o, y) {
+  const n = Math.max(1, Math.round((s1 - s0) / 6));
+  for (let i = 0; i <= n; i++) { const s = s0 + (s1 - s0) * i / n; boxL(st, s - 0.4, s + 0.4, o - 0.25, o + 0.25, y - 0.16, y, standLampMat); }
+}
 function speakers(st, n, R) {
   const o = 5, top = R - 0.9;
   for (let i = 0; i < n; i++) {
@@ -1679,6 +1685,7 @@ for (const st of STANDS) {
     roof.renderOrder = 2;   // drawn after the lower goal-end roofs it overlaps, in a fixed order (no flicker)
     st.roofMeshes = [roof];
     speakers(st, 8, R);
+    standLamps(st, -w0 + 3, L + w1 - 3, B - 7, R - 0.6);
     boxL(st, -w0, L + w1, -2.4, -1.2, R - 1.5, R + 0.4, whiteBand, { cast: true });
     boxL(st, -w0, L + w1, -2.3, -1.3, R - 1.62, R - 1.5, roofLightMat);
     boxL(st, -w0, L + w1, B + 1.2, B + 1.6, R - 1.4, R + 0.2, whiteBand, { cast: true });
@@ -1711,6 +1718,7 @@ for (const st of STANDS) {
     roof.renderOrder = 1;
     st.roofMeshes = [roof];
     speakers(st, 5, R);
+    standLamps(st, 1, L - 1, B - 8, R - 0.6);
     boxL(st, -ge0, L + ge1, -2.4, -1.2, R - 1.7, R + 0.3, whiteBand, { cast: true });
     boxL(st, -ge0, L + ge1, -2.3, -1.3, R - 1.82, R - 1.7, roofLightMat);
     const nCol = 8;
@@ -2908,11 +2916,18 @@ const setNight = (() => {
   const lights = new THREE.Group();
   lights.visible = false; scene.add(lights);
   for (const { pos, target } of floodHeads) {
-    const sp = new THREE.SpotLight(0xf1f5ff, 3.2, 0, 0.62, 0.75, 0);
+    const sp = new THREE.SpotLight(0xfffaf0, 2.6, 0, 0.62, 0.75, 0);
     sp.position.copy(pos); sp.target.position.copy(target);
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
     glow.position.copy(pos); glow.scale.set(10, 10, 1);
     lights.add(sp, sp.target, glow);
+  }
+  // the lamps over the top rows light the stands from above the pitch, square onto each (no shadows, so the roofs
+  // do not leave the upper rows dark)
+  for (const [x, z] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+    const d = new THREE.DirectionalLight(0xfff6ea, 0.55);
+    d.position.set(-x * 40, 45, -z * 40); d.target.position.set(x * 60, 12, z * 45);
+    lights.add(d, d.target);
   }
   const day = { top: skyMat.uniforms.top.value.clone(), bottom: skyMat.uniforms.bottom.value.clone(), fog: scene.fog.color.clone(),
     hemi: [hemi.color.clone(), hemi.groundColor.clone(), hemi.intensity], sun: [sun.color.clone(), sun.intensity, sun.position.clone()] };
@@ -2920,9 +2935,10 @@ const setNight = (() => {
     lights.visible = on;
     skyMat.uniforms.top.value.set(on ? 0x02050d : day.top); skyMat.uniforms.bottom.value.set(on ? 0x1b2236 : day.bottom);
     scene.fog.color.set(on ? 0x0b1020 : day.fog);
-    hemi.color.set(on ? 0x6d7fa8 : day.hemi[0]); hemi.groundColor.set(on ? 0x1c2416 : day.hemi[1]); hemi.intensity = on ? 0.7 : day.hemi[2];
-    sun.color.set(on ? 0xeef3ff : day.sun[0]); sun.intensity = on ? 0.75 : day.sun[1];
+    hemi.color.set(on ? 0x8d97a8 : day.hemi[0]); hemi.groundColor.set(on ? 0x2c4220 : day.hemi[1]); hemi.intensity = on ? 0.7 : day.hemi[2];
+    sun.color.set(on ? 0xfff8ec : day.sun[0]); sun.intensity = on ? 0.35 : day.sun[1];
     if (on) sun.position.set(-15, 160, 20); else sun.position.copy(day.sun[2]);
+    standLampMat.emissiveIntensity = on ? 3 : 0;
     if (lampMat) { lampMat.emissive.set(on ? 0xffffff : 0x000000); lampMat.emissiveMap = lampMat.map; lampMat.emissiveIntensity = 2.2; lampMat.needsUpdate = true; }
   };
 })();
