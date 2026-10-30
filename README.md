@@ -27,7 +27,7 @@ Otwórz `stadion-wisla/index.html` w przeglądarce. To samodzielna kopia z wbudo
 
 ## Model
 
-- Trybuny A (z H), C, E, G i narożniki B, D, F; pawilon medialny w narożniku H. Jego szklany bęben ma 10 m promienia, a betonowy cokół dochodzi do końca skrzydła H11. Skrzydło kończy się tuż za ostatnimi krzesełkami, bez pustych stopni. H11 jest niebieski we wszystkich rzędach od środka wejścia (schodów z murawy) do końca skrzydła.
+- Trybuny A (z H), C, E, G i narożniki B, D, F; pawilon medialny w narożniku H. Jego szklany bęben ma 10 m promienia, a betonowy cokół dochodzi do końca skrzydła H11. Górna krawędź cokołu ma barierki: z przodu i wzdłuż boków przy G i H11, dopóki te trybuny są niższe od cokołu. Skrzydło kończy się tuż za ostatnimi krzesełkami, bez pustych stopni. H11 jest niebieski we wszystkich rzędach od środka wejścia (schodów z murawy) do końca skrzydła.
 - Każde krzesełko pochodzi z planu miejsc klubu, z prawdziwym sektorem, rzędem i numerem: 32 320 na trybunach i 938 na balkonie przed skyboxami między poziomami (skyboxy SK01–SK34 po 4 rzędy, loża prezydencka, balkony na E), razem 33 258. Z 241 stanowiskami trybuny prasowej to 33 499, tyle co w planie.
 - Liczby rzędów jak w planie: G 32, C 33, poziomy dolne 18 (narożniki D i F 22), górne: A/H 21, E 25, narożniki B/D/F 25.
 - Schody, wyjścia, tunel dla piłkarzy i trybuna prasowa są tam, gdzie plan zostawia przerwy w rzędach: 2–5 brakujących miejsc to schody, większa przerwa przez co najmniej trzy rzędy to wyjście.
