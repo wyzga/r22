@@ -850,12 +850,16 @@ sun.shadow.normalBias = 0.06;
 scene.add(sun);
 
 // sky: a gradient from the pale horizon up to blue, with soft, sparse fair-weather clouds drawn on a flat layer
-// overhead (value-noise fbm), thinning out towards the horizon; at night they turn dark and faint
+// overhead (value-noise fbm), thinning out towards the horizon; at night they turn dark and faint, and behind them
+// come out the stars (one in a few dozen cells of a grid on the sky, of varied brightness) and the full moon with
+// its darker seas and a soft halo
 const skyMat = new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,
-  uniforms: { top: { value: new THREE.Color(0x4f86c9) }, bottom: { value: new THREE.Color(0xdce8f4) }, cloud: { value: new THREE.Color(0xffffff) }, cover: { value: 0.85 } },
+  uniforms: { top: { value: new THREE.Color(0x4f86c9) }, bottom: { value: new THREE.Color(0xdce8f4) }, cloud: { value: new THREE.Color(0xffffff) }, cover: { value: 0.85 },
+    night: { value: 0 }, moonDir: { value: new THREE.Vector3(0.62, 0.5, -0.6).normalize() } },
   vertexShader: 'varying vec3 vP; void main(){ vP = (modelMatrix*vec4(position,1.)).xyz; gl_Position = projectionMatrix*viewMatrix*vec4(vP,1.); }',
-  fragmentShader: `uniform vec3 top; uniform vec3 bottom; uniform vec3 cloud; uniform float cover; varying vec3 vP;
+  fragmentShader: `uniform vec3 top; uniform vec3 bottom; uniform vec3 cloud; uniform float cover; uniform float night; uniform vec3 moonDir; varying vec3 vP;
+    float h31(vec3 p){ p = fract(p*0.1031); p += dot(p, p.zyx+31.32); return fract((p.x+p.y)*p.z); }
     float h21(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
       return mix(mix(h21(i), h21(i+vec2(1.,0.)), f.x), mix(h21(i+vec2(0.,1.)), h21(i+vec2(1.,1.)), f.x), f.y); }
@@ -863,11 +867,31 @@ const skyMat = new THREE.ShaderMaterial({
     void main(){
       vec3 d = normalize(vP); float h = clamp(d.y*1.6+0.05,0.,1.);
       vec3 c = mix(bottom, top, pow(h,0.7));
+      float glow = 0.;
+      if (d.y > 0. && night > 0.) {
+        // stars: a random point in some of the cells of a grid around the sky, fading out low down
+        vec3 g = d*180., i = floor(g); float r = h31(i);
+        if (r > 0.982) {
+          vec3 o = i + 0.5 + (vec3(h31(i+1.7), h31(i+5.3), h31(i+9.1)) - 0.5)*0.6;
+          float b = smoothstep(0.32, 0.0, length(g - o))*(0.35 + 0.65*h31(i+3.3))*smoothstep(0.03, 0.2, d.y);
+          c += vec3(0.95, 0.97, 1.0)*b*night;
+        }
+        // the moon: a disc about 1.7 deg across, its seas from noise, slightly darker at the rim, and a halo
+        float a = acos(clamp(dot(d, moonDir), -1., 1.)), R = 0.03;
+        glow = exp(-a*14.)*0.22 + exp(-a*60.)*0.25;
+        if (a < R) {
+          vec3 u = normalize(cross(moonDir, vec3(0.,1.,0.))), v = cross(u, moonDir);
+          vec2 m = vec2(dot(d, u), dot(d, v))/R;
+          float sea = smoothstep(0.45, 0.75, fbm(m*1.6 + vec2(4.2, 1.3)));
+          vec3 moon = vec3(0.96, 0.94, 0.86)*(1. - 0.28*sea)*(0.82 + 0.18*sqrt(max(0., 1. - dot(m, m))));
+          c = mix(c, moon, smoothstep(R, R*0.93, a)*night);
+        } else c += vec3(0.55, 0.6, 0.72)*glow*night;
+      }
       if (d.y > 0.) {
         vec2 q = d.xz/(d.y+0.15)*1.3 + vec2(3.,7.);
         float n = fbm(q), k = smoothstep(0.56, 0.8, n)*smoothstep(0.02, 0.3, d.y);
         float shade = 0.86 + 0.14*smoothstep(0.5, 0.9, fbm(q*1.7 + vec2(-0.08, 0.05)));
-        c = mix(c, cloud*shade, k*cover);
+        c = mix(c, (cloud + vec3(0.5, 0.52, 0.58)*glow*night)*shade, k*cover);
       }
       gl_FragColor = vec4(c,1.);
     }`,
@@ -901,9 +925,9 @@ const loadTex = (url, mirror) => new Promise(res => texLoader.load(ASSET(url), t
 // seamlessly (light on average, so the colours of the materials it is laid on stay much as they were)
 const concreteTex = canvasTex(512, 512, (g, w, h) => {
   const r = rng(7), wrap = (x, y, f) => { for (const dx of [-w, 0, w]) for (const dy of [-h, 0, h]) f(x + dx, y + dy); };
-  g.fillStyle = "#f3f2ef"; g.fillRect(0, 0, w, h);
+  g.fillStyle = "#f8f7f4"; g.fillRect(0, 0, w, h);
   for (let i = 0; i < 90; i++) {
-    const x = r() * w, y = r() * h, rad = 30 + r() * 110, c = r() < 0.55 ? "90,88,84" : "255,255,255", a = 0.05 + r() * 0.08;
+    const x = r() * w, y = r() * h, rad = 30 + r() * 110, c = r() < 0.5 ? "110,108,104" : "255,255,255", a = 0.05 + r() * 0.08;
     wrap(x, y, (cx, cy) => {
       const gr = g.createRadialGradient(cx, cy, 0, cx, cy, rad); gr.addColorStop(0, `rgba(${c},${a})`); gr.addColorStop(1, `rgba(${c},0)`);
       g.fillStyle = gr; g.fillRect(cx - rad, cy - rad, rad * 2, rad * 2);
@@ -1173,8 +1197,8 @@ for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
 // ---------------------------------------------------------------------------
 await Promise.race([Promise.all([document.fonts.load('700 40px "Saira Condensed"'), document.fonts.load('600 40px "Inter Tight"'), document.fonts.load('700 40px "Quicksand"')]), new Promise(r => setTimeout(r, 1800))]).catch(() => {});
 
-const concrete = texMat(TX_CONCRETE, 4, { color: 0x7b8087, roughness: 0.92, side: THREE.DoubleSide });
-const coreMat = texMat(TX_CONCRETE, 4, { color: 0x5f646b, roughness: 0.95 });
+const concrete = texMat(TX_CONCRETE, 4, { color: 0xaeb1b4, roughness: 0.92, side: THREE.DoubleSide });
+const coreMat = texMat(TX_CONCRETE, 4, { color: 0x969a9f, roughness: 0.95 });
 const blackGlass = texMat(TX_FACADE, 12, { color: TX_FACADE ? 0xc9d0da : 0x161b26, roughness: 0.2, metalness: 0.45 });
 const greyGlass = texMat(TX_FACADE, 12, { color: TX_FACADE ? 0xffffff : 0x3a4250, roughness: 0.25, metalness: 0.35 });
 const whiteBand = new THREE.MeshStandardMaterial({ color: 0xf1f3f6, roughness: 0.55 });
@@ -1394,7 +1418,7 @@ function ledCanvas(texts, colors) {
 }
 const boardTex = canvasTex(2048, 80, ledCanvas([SPONSOR, 'WISŁA KRAKÓW', SPONSOR, 'TS WISŁA · OD 1906'], [null, ['#c8172e', '#fff'], null, ['#0f1d3d', '#fff']]));
 // the front of the upper tiers all round (side stands and corners): bare concrete, no advertising
-const fasciaMat = texMat(TX_CONCRETE, 4, { color: 0x80848a, roughness: 0.9 });
+const fasciaMat = texMat(TX_CONCRETE, 4, { color: 0xb0b3b6, roughness: 0.9 });
 const ledMats = [];
 function ledMat(tex, w, tileLen) {
   const map = tex.clone(); map.repeat.set(w / tileLen, 1); map.needsUpdate = true;
@@ -1649,7 +1673,7 @@ for (const st of STANDS) {
       // between the booths, as photographed: a gallery at the booths' floor level, glass railing along its front,
       // the glass wall behind it in dark frames between light concrete columns, and on it the staff's places, two
       // rows of blue seats on a step, in two runs either side of the middle (left out above the press stand)
-      const g0 = 19, g1 = L - 19, yG = yT + 2.05, colMat = texMat(TX_CONCRETE, 4, { color: 0x9a9d9f, roughness: 0.9 });
+      const g0 = 19, g1 = L - 19, yG = yT + 2.05, colMat = texMat(TX_CONCRETE, 4, { color: 0xc2c4c5, roughness: 0.9 });
       boxL(st, g0, g1, oF - 0.1, upEnd, yT + 1.5, yG, colMat, { cast: true });
       boxL(st, g0, g1, upEnd - 1.25, upEnd, yG, yG + 0.35, coreMat);
       const rm = [], nR = Math.ceil((g1 - g0) / 2);
@@ -1700,7 +1724,7 @@ for (const st of STANDS) {
         const FL = -0.6, s0 = s - hw, s1 = s + hw, o0 = -2.8, o1 = -0.2;
         const cs = [W(st, s0, o0, 0), W(st, s1, o1, 0)];
         PITS.push([Math.min(cs[0].x, cs[1].x), Math.max(cs[0].x, cs[1].x), Math.min(cs[0].z, cs[1].z), Math.max(cs[0].z, cs[1].z)]);
-        const concrete = texMat(TX_CONCRETE, 3, { color: 0x6b6f75, roughness: 0.95 }), asphalt = new THREE.MeshStandardMaterial({ color: 0x3b3e44, roughness: 1 });
+        const concrete = texMat(TX_CONCRETE, 3, { color: 0xa2a5a9, roughness: 0.95 }), asphalt = new THREE.MeshStandardMaterial({ color: 0x3b3e44, roughness: 1 });
         const navy = new THREE.MeshStandardMaterial({ color: 0x1d3a7a, roughness: 0.6 }), seatRed = new THREE.MeshStandardMaterial({ color: 0xc8283a, roughness: 0.7 });
         boxL(st, s0, s1, o0, o1, FL - 0.03, FL, asphalt);                                   // floor
         boxL(st, s0, s1, o0, o0 + 0.2, FL, 0.35, concrete, { cast: true });                // kerb on the pitch side, 0.35 m over the turf
@@ -1830,7 +1854,7 @@ instancedMembers(members.cable, cableMat, false);
     m.position.set(cx, (y0 + y1) / 2, cz).addScaledVector(v, (v0 + v1) / 2).addScaledVector(u, (d0 + d1) / 2);
     return m;
   };
-  const H = 5, plinthMat = texMat(TX_CONCRETE, 4, { color: 0x8d8c87, roughness: 0.95 });
+  const H = 5, plinthMat = texMat(TX_CONCRETE, 4, { color: 0xb8b6b0, roughness: 0.95 });
   const pts = [[-54, -41], [-61.5, -33.5], [-79, -33.5], [-79, -61], [-54, -61]];   // up to the end of the H11 wing (x > -54)
   const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, z))), { depth: H, bevelEnabled: false });
   g.rotateX(Math.PI / 2); g.translate(0, H, 0);
@@ -2202,7 +2226,7 @@ function exitGateSign(name) {
 // rows with a flat landing, glass double doors in its back wall under a green exit sign, and low railings (teal
 // posts and rail, glass infill) round its edges.
 {
-  const stairMat = texMat(TX_CONCRETE, 3, { color: 0xa2a7ad, roughness: 0.9 });
+  const stairMat = texMat(TX_CONCRETE, 3, { color: 0xc4c7ca, roughness: 0.9 });
   const yellow = new THREE.MeshStandardMaterial({ color: 0xf0c22e, roughness: 0.8 });
   for (const st of STANDS) {
     const treads = [], plain = [];
@@ -3180,7 +3204,7 @@ const setNight = (() => {
   return on => {
     lights.visible = on;
     skyMat.uniforms.top.value.set(on ? 0x02050d : day.top); skyMat.uniforms.bottom.value.set(on ? 0x1b2236 : day.bottom);
-    skyMat.uniforms.cloud.value.set(on ? 0x262c3b : 0xffffff); skyMat.uniforms.cover.value = on ? 0.5 : 0.85;
+    skyMat.uniforms.cloud.value.set(on ? 0x262c3b : 0xffffff); skyMat.uniforms.cover.value = on ? 0.5 : 0.85; skyMat.uniforms.night.value = on ? 1 : 0;
     scene.fog.color.set(on ? 0x0b1020 : day.fog);
     hemi.color.set(on ? 0x8d97a8 : day.hemi[0]); hemi.groundColor.set(on ? 0x2c4220 : day.hemi[1]); hemi.intensity = on ? 0.7 : day.hemi[2];
     sun.color.set(on ? 0xfff8ec : day.sun[0]); sun.intensity = on ? 0.35 : day.sun[1];
