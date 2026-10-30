@@ -2275,22 +2275,31 @@ function hideFanAt(sec, idx) {
   fans.instanceMatrix.needsUpdate = true;
 }
 
-// sector labels
+// sector labels, as the signs in the stadium (photographed at E14): the stand's letter white on red, the number
+// white on blue, side by side; a named sector (VIP, press) white on blue
 const labelGroup = new THREE.Group();
 scene.add(labelGroup);
 for (const sec of sectors) {
   if (sec.key === 'box') continue;   // (the skyboxes are too small and too many to label)
-  const c = document.createElement('canvas'); c.width = 256; c.height = 96;
+  const m = /^([A-Z])(\d+)$/.exec(sec.label), H = 120, font = px => `700 ${px}px "Saira Condensed", "Arial Narrow", sans-serif`;
+  const g0 = document.createElement('canvas').getContext('2d');
+  const parts = m ? [[m[1], '#d2232e', 96], [m[2], '#1f8fd6', 96]] : [[sec.label.toUpperCase(), '#1f8fd6', sec.label.length > 11 ? 52 : 64]];
+  const ws = parts.map(([t, , px]) => { g0.font = font(px); return Math.max(m ? 84 : 0, g0.measureText(t).width + 44); });
+  const c = document.createElement('canvas'); c.width = ws.reduce((a, w) => a + w, 0); c.height = H;
   const g = c.getContext('2d');
-  g.font = `700 ${sec.label.length > 4 ? (sec.label.length > 8 ? (sec.label.length > 11 ? 32 : 40) : 46) : 62}px "Saira Condensed", "Arial Narrow", sans-serif`;
   g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.lineWidth = 8; g.strokeStyle = 'rgba(8,16,31,0.85)'; g.strokeText(sec.label, 128, 50);
-  g.fillStyle = '#fff'; g.fillText(sec.label, 128, 50);
-  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  let x = 0;
+  parts.forEach(([t, bg, px], i) => {
+    g.fillStyle = bg; g.fillRect(x, 0, ws[i], H);
+    g.font = font(px); g.fillStyle = '#fff'; g.fillText(t, x + ws[i] / 2, H / 2 + 4);
+    x += ws[i];
+  });
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
   const rowKeys = [...sec.rows.keys()], midRow = sec.rows.get(rowKeys[Math.floor(rowKeys.length / 2)]);
   const s = sec.seats[midRow[Math.floor(midRow.length / 2)]];
-  sp.position.set(s.x, s.y + 2.6, s.z); sp.scale.set(5.6, 2.1, 1);
+  const h = 2.2;
+  sp.position.set(s.x, s.y + 2.6, s.z); sp.scale.set(h * c.width / H, h, 1);
   labelGroup.add(sp);
 }
 
