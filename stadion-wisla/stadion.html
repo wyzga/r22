@@ -452,12 +452,13 @@ function fitRow(ps, a, b, m) {
       if (!rows.has(p.r)) rows.set(p.r, []);
       rows.get(p.r).push(p);
     }
-    const cand = [], wide = [];
+    const cand = [], wide = [], ws = [];
     for (const [r, ps] of [...rows].sort((p, q) => p[0] - q[0])) {
       // (on the corners in number order, so neighbouring sectors never interleave)
       ps.sort(st.fan ? (a, b) => numDir * (a.num - b.num) : (a, b) => a.s - b.s);
       if (st.fan) { const [a, b] = fanRow(st, t, r, key); fitRow(ps, a, b, 0.42); }
       const ds = ps.slice(1).map((p, i) => p.s - ps[i].s).sort((a, b) => a - b), w = pitch || ds[ds.length >> 1] || 0.45;
+      ws.push(w);
       for (let i = 1; i < ps.length; i++) {
         const g = (ps[i].s - ps[i - 1].s) / w - 1, span = [r, ps[i - 1].s + w / 2, ps[i].s - w / 2];
         if (g >= 1.5 && g < 5.5) st.stairs[key].push(span);
@@ -473,20 +474,23 @@ function fitRow(ps, a, b, m) {
       else groups.push({ r0: r, r1: r, a, b, pts: [[rowDepth(t, r), (a + b) / 2, b - a, r]] });
     }
     // (the lower corner tiers have none: their gaps are the open steps by the diagonal entrance stair)
-    const tierMid = t.o0 + t.rows * t.d / 2;
+    const tierMid = t.o0 + t.rows * t.d / 2, sw = [...ws].sort((a, b) => a - b)[ws.length >> 1] || 0.45;   // (a seat's width)
     st.exits[key] = groups.filter(g => g.r1 - g.r0 >= 2 && !(st.fan && key === 'lower')).map(g => {
       // centre line s = c(o): fixed on the straight stands, drifting with depth on the fans
       const n = g.pts.length, mo = g.pts.reduce((a, p) => a + p[0], 0) / n, mc = g.pts.reduce((a, p) => a + p[1], 0) / n;
       const v = g.pts.reduce((a, p) => a + (p[0] - mo) ** 2, 0);
       const k = st.fan && v ? g.pts.reduce((a, p) => a + (p[0] - mo) * (p[1] - mc), 0) / v : 0;
       let h = Math.max(1.0, Math.min(...g.pts.map(p => p[2])) / 2);
-      // behind the goals (as photographed at G3) the exit is narrower than the gap: a stair two seats wide runs up
-      // either side of it, outside its railings
-      if (st.tiers.single && h - 2 * pitch >= 0.8) {
-        h -= 2 * pitch;
-        for (const [, m, wd, r] of g.pts) st.stairs[key].push([r, m - wd / 2, mc - h], [r, mc + h, m + wd / 2]);
+      const c = o => mc + k * (o - mo);
+      // the exit is narrower than the gap: a stair runs up either side of it, outside its railings, to the rows of
+      // the sectors above (two seats wide behind the goals, as photographed at G3, three elsewhere; not by the
+      // players' tunnel)
+      const ns = Math.min(st.tiers.single ? 2 : 3, Math.floor((h - 0.8) / sw));
+      if (ns > 0 && !(st.kind === 'main' && key === 'lower' && g.r0 === 0)) {
+        h -= ns * sw;
+        for (const [o, m, wd, r] of g.pts) for (const [a, b] of [[m - wd / 2, c(o) - h], [c(o) + h, m + wd / 2]]) if (b - a > 0.2) st.stairs[key].push([r, a, b]);
       }
-      return { c: o => mc + k * (o - mo), h, rows: [g.r0, g.r1] };
+      return { c, h, rows: [g.r0, g.r1] };
     }).sort((p, q) => p.c(tierMid) - q.c(tierMid));   // (in order at mid-depth: on a corner they drift apart with depth)
     // the corners' lower tiers: the plan leaves their front rows nearly empty, and an exit opens there as on the other
     // lower tiers (rows from the first without seats to the last with at most four). It is in the run along the side
@@ -496,7 +500,7 @@ function fitRow(ps, a, b, m) {
       const cnt = r => (rows.get(r) || []).length;
       let v0 = 0; while (v0 < t.rows && cnt(v0)) v0++;
       let v1 = v0; while (v1 + 1 < t.rows && cnt(v1 + 1) <= 4) v1++;
-      const h = 1.7, side = st.endS0 ? st.a1 : st.a0, w = side + TAU * (t.o0 + v0 * t.d) - h - 0.3;
+      const h = 0.9, side = st.endS0 ? st.a1 : st.a0, w = side + TAU * (t.o0 + v0 * t.d) - h - 0.3;
       const c = st.endS0 ? o => rowS1(st, o) - w : o => rowS0(st, o) + w;
       if (v1 > v0 && v1 + 1 < t.rows) st.exits.lower.push({ c, h, rows: [v0, v1] });
     }
