@@ -792,9 +792,14 @@ function fitRow(ps, a, b, m) {
     const up = lastSeats('upper', st.tiers.upper), box = st.boxTier ? lastSeats('box', st.boxTier) : [];
     // (u: the place along that run, s at depth o being u + 2·TAU·o)
     const u = Math.max(...[...up, ...box].map(([o, v]) => v - 2 * TAU * o));
-    st.edgeU = o => g > 0 ? Math.min(u + 2 * TAU * o, rowS1(st, o)) : Math.max(-(u + 2 * TAU * o), rowS0(st, o));
+    // the top rows stop shorter and shorter: there the edge follows them in, the tier cut back past the last seat of
+    // each row and every row above it (so it only ever steps in going up, never out again)
+    const tu = st.tiers.upper, uRow = new Array(tu.rows).fill(-Infinity);
+    for (const [o, v] of up) uRow[Math.round((o - tu.o0) / tu.d - 0.55)] = v - 2 * TAU * o;
+    for (let r = tu.rows - 2; r >= 0; r--) uRow[r] = Math.max(uRow[r], uRow[r + 1]);
+    const uAt = o => o < tu.o0 ? u : Math.min(u, uRow[Math.min(tu.rows - 1, Math.floor((o - tu.o0) / tu.d + 1e-6))]);
+    st.edgeU = o => g > 0 ? Math.min(uAt(o) + 2 * TAU * o, rowS1(st, o)) : Math.max(-(uAt(o) + 2 * TAU * o), rowS0(st, o));
     // (the open steps of the upper tier stop there too)
-    const tu = st.tiers.upper;
     st.steps.upper = st.steps.upper.map(([r, a, b]) => { const e = st.edgeU(rowDepth(tu, r)); return g > 0 ? [r, a, Math.min(b, e)] : [r, Math.max(a, e), b]; })
       .filter(([, a, b]) => b - a > 0.2);
   }
@@ -876,7 +881,7 @@ const loadTex = (url, mirror) => new Promise(res => texLoader.load(ASSET(url), t
 }, undefined, () => res(null)));
 // herb.svg (the club crest) is optional: present only in the local copy next to index.html
 const [TX_GRASS, TX_CONCRETE, TX_FACADE, TX_ROOF, TX_PARK, TX_CREST] = await Promise.all([
-  loadTex('tex/grass.jpg', true), loadTex('tex/concrete.jpg'), loadTex('tex/facade.jpg'), loadTex('tex/roof.jpg'), loadTex('tex/park.jpg', true), loadTex('herb.svg'),
+  loadTex('tex/grass.jpg', true), null, null, loadTex('tex/roof.jpg'), loadTex('tex/park.jpg', true), loadTex('herb.svg'),
 ]);
 // the seat's moulded plastic: white (tinted per seat), a square darker rim and two pressed ridges across
 const TX_SEAT = canvasTex(256, 256, (g, w, h) => {
@@ -1415,13 +1420,10 @@ for (const st of STANDS) {
       instancedMembers(rm, steelBlue, false);
     }
     standMeshes.push(cornerPiece([[gO, yF], [gO + 0.15, yF], [gO + 0.15, up.y0 - 0.5], [gO, up.y0 - 0.5]], skyGlass));
-    const fTop = tierTop(up) + 1.3;
+    const fTop = tierTop(up);   // (the corner building stops level with the top row: no wall stands above the seats)
     cornerPiece([[upEnd, 0], [upEnd, fTop], [st.back, fTop], [st.back, 0]], blackGlass, { cast: true });
-    cornerPiece([[st.back, 7.2], [st.back + 0.35, 7.2], [st.back + 0.35, 8.4], [st.back, 8.4]], whiteBand);
-    cornerPiece([[st.back, 15.5], [st.back + 0.35, 15.5], [st.back + 0.35, 16.1], [st.back, 16.1]], whiteBand);
     // band on the front of the upper tier, continuing the side stand's: bare concrete
     cornerPiece([[up.o0 - 0.06, up.y0 - 1.4], [up.o0, up.y0 - 1.4], [up.o0, up.y0], [up.o0 - 0.06, up.y0]], fasciaMat);
-    cornerPiece([[st.back, fTop - 1.4], [st.back + 0.35, fTop - 1.4], [st.back + 0.35, fTop], [st.back, fTop]], whiteBand);
     // building filling the corner out to the rectangle formed by the back lines of the neighbouring stands
     // (the corner's back runs along the side stand's back line, diagonally, then 3 m short of the goal-end stand's)
     const ob = st.back, xz = p => [p.x, p.z];
@@ -1502,13 +1504,6 @@ for (const st of STANDS) {
     // both sides of the stair between G3 and G4 (the away sector), front row to back
     if (st.awayGap) for (const sg of [st.awayGap.s0, st.awayGap.s1]) rail(rm, rowEdge(st, t, sg, 0, t.rows));
     instancedMembers(rm, steelBlue, false);
-    boxL(st, -0.8, L + 0.8, B, B + 0.35, 10.2, 11.4, whiteBand);
-    boxL(st, -0.8, L + 0.8, B, B + 0.35, top - 1.4, top, whiteBand);
-    if (st.id === 'C') {
-      // illuminated name sign on the black glass facade, as photographed
-      const sign = canvasTex(2048, 256, (g, w, h) => arenaLogo(g, w, h), false);
-      plane(st, L * 0.6, 40, B + 0.42, top - 6, 5, new THREE.MeshStandardMaterial({ map: sign, transparent: true, emissive: 0xffffff, emissiveMap: sign, emissiveIntensity: 1.1, roughness: 0.4 }), false);
-    }
   } else {
     const lo = T.lower, up = T.upper;
     const loEnd = tierEnd(lo), loTop = tierTop(lo) + 1.1, upEnd = tierEnd(up), under = up.y0 - 1.4;
@@ -1587,23 +1582,12 @@ for (const st of STANDS) {
       const n = Math.round((L + w0 + w1) / 4.4);
       for (let i = 0; i <= n; i++) { const s = -w0 + 0.4 + (L + w0 + w1 - 0.8) * i / n; boxL(st, s - 0.3, s + 0.3, upEnd - 0.5, upEnd + 0.3, tierTop(up), R - 3.4, coreMat, { cast: true }); }
     }
-    boxL(st, -0.2, L + 0.2, B, B + 0.4, 7.2, 8.4, whiteBand);
-    boxL(st, -0.2, L + 0.2, B, B + 0.4, R - 3.4, R - 2.2, whiteBand);
-    boxL(st, -0.2, L + 0.2, B, B + 0.4, 15.5, 16.1, whiteBand);
     // gable walls closing the ends of the stand (ends that open into a corner stand stay open so the tiers run on)
     for (const s of [0, L]) if (!st.openEnds.includes(s)) boxL(st, s + (s ? 0 : -0.6), s + (s ? 0.6 : 0), loEnd, B, 0, R - 2.2, blackGlass);
     if (st.kind === 'masts') {
       videoScreen(st, up, R);
     } else {
       videoScreen(st, up, R);
-      // facade lettering
-      plane(st, L * 0.3, 46, B + 0.42, 4.2, 2.6, new THREE.MeshStandardMaterial({
-        map: canvasTex(1536, 88, (g, w, h) => {
-          g.clearRect(0, 0, w, h); g.fillStyle = '#e8edf3';
-          g.font = '600 62px "Saira Condensed", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-          g.fillText('STADION MIEJSKI  im. Henryka Reymana', w / 2, h / 2 + 2);
-        }, false), transparent: true,
-      }), false);
       // dugouts with red roofs and the players' tunnel, set into the front of the stand
       // sunken dugouts, as photographed: a pit cut into the touchline strip (floor 0.6 m below the turf), a low concrete
       // kerb on the pitch side, red seats along the navy back wall and a thin roof that stays below the first row's eyes;

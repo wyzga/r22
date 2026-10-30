@@ -7,7 +7,7 @@ import path from 'node:path';
 const dir = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
 const read = f => fs.readFileSync(path.join(dir, f));
 const assets = {};
-for (const f of ['tex/grass.jpg', 'tex/concrete.jpg', 'tex/facade.jpg', 'tex/roof.jpg', 'tex/park.jpg']) {
+for (const f of ['tex/grass.jpg', 'tex/roof.jpg', 'tex/park.jpg']) {
   assets[f] = 'data:image/jpeg;base64,' + read(f).toString('base64');
 }
 if (fs.existsSync(path.join(dir, 'herb.svg'))) assets['herb.svg'] = 'data:image/svg+xml;base64,' + read('herb.svg').toString('base64');
