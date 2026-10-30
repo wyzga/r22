@@ -1042,6 +1042,7 @@ function buildGlassPanels() {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.computeVertexNormals();
   scene.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xd4e4ee, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.25, depthWrite: false, side: THREE.DoubleSide })));
+  glassPanels.length = 0;   // (built; any added later go into a mesh of their own)
 }
 function instancedMembers(list, mat, cast) {
   const geo = new THREE.BoxGeometry(1, 1, 1), m = new THREE.InstancedMesh(geo, mat, list.length), o = new THREE.Object3D();
@@ -1202,6 +1203,12 @@ function girder(st, s, oA, oB, y) {
     const o0 = oA + 1 + (oB - oA - 2) * j / n, o1 = oA + 1 + (oB - oA - 2) * (j + 1) / n;
     member(members.silver, W(st, s, o0, j % 2 ? y : y - d), W(st, s, o1, j % 2 ? y - d : y), 0.11);
   }
+}
+// the light band along a roof's front edge, tilted up: its top 15° back from the vertical, so it faces a little
+// upwards
+function roofEdge(st, s0, s1, yb, yt) {
+  const k = (yt - yb) * Math.tan(THREE.MathUtils.degToRad(15));
+  extrudeL(st, [[-2.4, yb], [-2.4 + k, yt], [-1.2 + k, yt], [-1.2, yb]], s0, s1, whiteBand, { cast: true });
 }
 function vaultRoof(st, s0, s1, oA, oB, y, bay = 5.4) {
   const n = Math.max(1, Math.round((s1 - s0) / bay)), w = (s1 - s0) / n, rise = w * 0.14, K = 10, ribs = (oB - oA) / 1.2;
@@ -1586,13 +1593,39 @@ for (const st of STANDS) {
       const yT = tierTop(up), oF = upEnd - 2.3, boothGlass = new THREE.MeshStandardMaterial({ color: 0xa9bfd4, roughness: 0.05, metalness: 0.5, transparent: true, opacity: 0.72, emissive: 0x1b2a3c }), frame = new THREE.MeshStandardMaterial({ color: 0x6d7782, roughness: 0.5, metalness: 0.4 });
       for (const [b0, b1] of [[0.6, 19], [L - 19, L - 0.6]]) {
         boxL(st, b0, b1, oF - 0.1, B - 0.1, yT + 1.5, yT + 2.05, coreMat, { cast: true });
-        boxL(st, b0, b1, oF, oF + 0.08, yT + 2.05, yT + 4.75, boothGlass);
-        for (const e of [b0, b1]) boxL(st, e - 0.05, e + 0.05, oF, upEnd, yT + 2.05, yT + 4.75, boothGlass);
-        for (let m = b0; m <= b1 + 0.01; m += (b1 - b0) / 10) boxL(st, m - 0.05, m + 0.05, oF - 0.04, oF + 0.1, yT + 2.05, yT + 4.75, frame);
+        // (the glass front leans out towards the pitch, 15° off the vertical, its top under the eave)
+        const yb = yT + 2.05, yt = yT + 4.75, lean = (yt - yb) * Math.tan(THREE.MathUtils.degToRad(15)), fm = [];
+        extrudeL(st, [[oF, yb], [oF - lean, yt], [oF - lean + 0.08, yt], [oF + 0.08, yb]], b0, b1, boothGlass);
+        for (const e of [b0, b1]) extrudeL(st, [[oF, yb], [oF - lean, yt], [upEnd, yt], [upEnd, yb]], e - 0.05, e + 0.05, boothGlass);
+        for (let m = b0; m <= b1 + 0.01; m += (b1 - b0) / 10) member(fm, W(st, m, oF - 0.03, yb), W(st, m, oF - lean - 0.03, yt), 0.1);
+        instancedMembers(fm, frame, false);
         plane(st, (b0 + b1) / 2, b1 - b0 - 0.2, upEnd - 0.3, yT + 3.4, 2.7, new THREE.MeshStandardMaterial({ color: 0x56616f, roughness: 0.8 }));
         boxL(st, b0 - 0.3, b1 + 0.3, oF - 0.9, B - 0.1, yT + 4.75, yT + 5.4, coreMat, { cast: true });
         boxL(st, b0, b1, upEnd, B - 0.1, yT + 2.05, yT + 4.75, coreMat);
       }
+      // between the booths, as photographed: a gallery at the booths' floor level, glass railing along its front,
+      // the glass wall behind it in dark frames between light concrete columns, and on it the staff's places, two
+      // rows of blue seats on a step, in two runs either side of the middle (left out above the press stand)
+      const g0 = 19, g1 = L - 19, yG = yT + 2.05, colMat = new THREE.MeshStandardMaterial({ color: 0x9a9d9f, roughness: 0.9 });
+      boxL(st, g0, g1, oF - 0.1, upEnd, yT + 1.5, yG, colMat, { cast: true });
+      boxL(st, g0, g1, upEnd - 1.25, upEnd, yG, yG + 0.35, coreMat);
+      const rm = [], nR = Math.ceil((g1 - g0) / 2);
+      rail(rm, Array.from({ length: nR + 1 }, (_, i) => W(st, g0 + (g1 - g0) * i / nR, oF - 0.05, yG)));
+      instancedMembers(rm, steelBlue, false);
+      for (let m = g0; m <= g1 + 0.01; m += (g1 - g0) / 44) boxL(st, m - 0.04, m + 0.04, upEnd - 0.06, upEnd, yG + 0.35, R - 2.2, frame);
+      boxL(st, g0, g1, upEnd - 0.06, upEnd, yT + 4.7, yT + 4.8, frame);
+      plane(st, (g0 + g1) / 2, g1 - g0, upEnd - 0.03, (yG + 0.35 + R - 2.2) / 2, R - 2.2 - yG - 0.35, new THREE.MeshStandardMaterial({ color: 0x7d91a6, roughness: 0.1, metalness: 0.5, emissive: 0x1e2c3a }));
+      const cols = [];
+      for (let i = 1; i < 8; i++) { const c = g0 + (g1 - g0) * i / 8; cols.push(c); boxL(st, c - 0.35, c + 0.35, upEnd - 0.7, upEnd, yG + 0.35, R - 2.2, colMat, { cast: true }); }
+      const pr = st.press, runs = pr ? [[g0 + 0.5, pr.s0 - 0.5], [pr.s1 + 0.5, g1 - 0.5]] : [[g0 + 0.5, g1 - 0.5]], spots = [];
+      for (const [a, b] of runs) for (let s = a + 0.25; s <= b - 0.25; s += 0.5) {
+        if (cols.some(c => Math.abs(c - s) < 0.65)) continue;
+        spots.push(W(st, s, upEnd - 1.75, yG), W(st, s, upEnd - 0.75, yG + 0.35));
+      }
+      const staff = new THREE.InstancedMesh(chairGeometry(0.42), new THREE.MeshStandardMaterial({ color: 0x3d61a8, map: TX_SEAT, roughness: 0.45, metalness: 0.05 }), spots.length);
+      const yaw = Math.atan2(st.n.x, st.n.z), d = new THREE.Object3D();
+      spots.forEach((p, i) => { d.position.copy(p); d.rotation.set(0, yaw, 0); d.updateMatrix(); staff.setMatrixAt(i, d.matrix); });
+      staff.receiveShadow = true; scene.add(staff);
     }
     // building behind: black glass outside with white bands; its face towards the pitch above the top row and
     // its ends are glazed in light reflective glass, as photographed
@@ -1686,7 +1719,7 @@ for (const st of STANDS) {
     st.roofMeshes = [roof];
     speakers(st, 8, R);
     standLamps(st, -w0 + 3, L + w1 - 3, B - 7, R - 0.6);
-    boxL(st, -w0, L + w1, -2.4, -1.2, R - 1.5, R + 0.4, whiteBand, { cast: true });
+    roofEdge(st, -w0, L + w1, R - 1.5, R + 0.4);
     boxL(st, -w0, L + w1, -2.3, -1.3, R - 1.62, R - 1.5, roofLightMat);
     boxL(st, -w0, L + w1, B + 1.2, B + 1.6, R - 1.4, R + 0.2, whiteBand, { cast: true });
     const oB = B - 1, hB = R + 9.5, oF = 1.5, hF = R + 1.0;
@@ -1719,7 +1752,7 @@ for (const st of STANDS) {
     st.roofMeshes = [roof];
     speakers(st, 5, R);
     standLamps(st, 1, L - 1, B - 8, R - 0.6);
-    boxL(st, -ge0, L + ge1, -2.4, -1.2, R - 1.7, R + 0.3, whiteBand, { cast: true });
+    roofEdge(st, -ge0, L + ge1, R - 1.7, R + 0.3);
     boxL(st, -ge0, L + ge1, -2.3, -1.3, R - 1.82, R - 1.7, roofLightMat);
     const nCol = 8;
     for (let i = 0; i < nCol; i++) {
@@ -2314,6 +2347,26 @@ function buildSector(st, key, name, list) {
   sectors.push(sec); sectorByName.set(name, sec); seatMeshes.push(mesh);
 }
 const totalSeats = sectors.reduce((a, s) => a + s.seats.length, 0);
+// railings up both sides of the stair between a side stand's upper tier and the corner beside it (as between A23
+// and B22), the whole way from the front row to the back: on the side stand's along the end of its seats, on the
+// corner's along the nearest of its seats (its own rows, deeper and lower than the side stand's)
+{
+  const rm = [];
+  for (const sd of STANDS.filter(st => !st.fan && st.tiers.upper)) for (const sE of [0, sd.len]) {
+    const c = STANDS.find(st => st.fan && st.P0.distanceTo(W(sd, sE, 0, 0)) < 10);
+    if (!c) continue;
+    const dir = sE ? 1 : -1, sOf = p => (p.x - sd.P0.x) * sd.t.x + (p.z - sd.P0.z) * sd.t.z;
+    const own = sectors.filter(sec => sec.st === sd && sec.key === 'upper').flatMap(sec => sec.seats.map(sOf));
+    const nb = sectors.filter(sec => sec.st === c && sec.key === 'upper').flatMap(sec => sec.seats.map(sOf)).filter(v => dir * (v - sE) > 0);
+    if (!own.length || !nb.length) continue;
+    const sA = (dir > 0 ? Math.max(...own) : Math.min(...own)) + dir * 0.35, sB = (dir > 0 ? Math.min(...nb) : Math.max(...nb)) - dir * 0.35;
+    if (dir * (sB - sA) < 0.8) continue;
+    rail(rm, rowEdge(sd, sd.tiers.upper, sA, 0, sd.tiers.upper.rows));
+    rail(rm, rowEdge(sd, c.tiers.upper, sB, 0, c.tiers.upper.rows));
+  }
+  instancedMembers(rm, steelBlue, false);
+  buildGlassPanels();
+}
 const capacity = sectors.reduce((a, s) => a + (s.name === 'PRASA' ? 0 : s.seats.length), 0);   // 33 258, as in the plan
 
 // Fans for the occupancy simulator: one instance per seat, ordered by when the seat fills. Spectators take
