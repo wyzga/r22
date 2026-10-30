@@ -725,8 +725,9 @@ function fitRow(ps, a, b, m) {
     st.aisleS[key] = st.stairs[key].filter(g => g[0] === back).map(([, a, b]) => (a + b) / 2);
   }
   // A corner's upper structure (the upper tier, the walkway and skybox balcony, the building under them) ends just
-  // past its last seat towards the goal-end stand, leaving an open gap beside that stand: edgeU(o), between the
-  // rows' last seats (and the balcony's, over its depth)
+  // past its last seat towards the goal-end stand, leaving an open gap beside that stand: edgeU(o), a straight edge
+  // square to the rows of the run along that stand, just past the farthest of the rows' last seats (and the
+  // balcony's), so rows that stop short leave bare concrete steps up to it rather than a notch
   for (const st of STANDS) {
     if (!st.fan) continue;
     const g = st.endS0 ? -1 : 1;
@@ -735,17 +736,10 @@ function fitRow(ps, a, b, m) {
       for (const p of st.placed[key] || []) by.set(p.r, Math.max(by.get(p.r) ?? -Infinity, g * p.s + 0.7));
       return [...by].map(([r, v]) => [rowDepth(t, r), v]).sort((a, b) => a[0] - b[0]);
     };
-    const lerp = (pts, o) => {
-      if (o <= pts[0][0]) return pts[0][1];
-      for (let i = 1; i < pts.length; i++) if (o <= pts[i][0]) { const [o0, v0] = pts[i - 1], [o1, v1] = pts[i]; return v0 + (v1 - v0) * (o - o0) / (o1 - o0); }
-      return pts[pts.length - 1][1];
-    };
     const up = lastSeats('upper', st.tiers.upper), box = st.boxTier ? lastSeats('box', st.boxTier) : [];
-    st.edgeU = o => {
-      let v = lerp(up, o);
-      if (box.length && o <= box[box.length - 1][0] + 0.5) v = Math.max(v, lerp(box, o));
-      return g > 0 ? Math.min(g * v, rowS1(st, o)) : Math.max(g * v, rowS0(st, o));
-    };
+    // (u: the place along that run, s at depth o being u + 2·TAU·o)
+    const u = Math.max(...[...up, ...box].map(([o, v]) => v - 2 * TAU * o));
+    st.edgeU = o => g > 0 ? Math.min(u + 2 * TAU * o, rowS1(st, o)) : Math.max(-(u + 2 * TAU * o), rowS0(st, o));
     // (the open steps of the upper tier stop there too)
     const tu = st.tiers.upper;
     st.steps.upper = st.steps.upper.map(([r, a, b]) => { const e = st.edgeU(rowDepth(tu, r)); return g > 0 ? [r, a, Math.min(b, e)] : [r, Math.max(a, e), b]; })
