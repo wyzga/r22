@@ -793,6 +793,20 @@ const member = (list, a, b, th) => list.push([a, b, th]);
 // glass balustrades: panels standing h metres on a raking line a → b, all merged into one see-through mesh
 const glassPanels = [];
 const glassPanel = (a, b, h) => glassPanels.push([a, b, h]);
+// a railing through points pts (teal posts and rail into list rm, glass infill), and the points up a tier's stepped
+// side edge at s, from row r0 to the back of row r1 - 1
+const rail = (rm, pts) => {
+  for (let i = 0; i + 1 < pts.length; i++) {
+    glassPanel(pts[i], pts[i + 1], 0.9);
+    member(rm, pts[i].clone().setY(pts[i].y + 1.0), pts[i + 1].clone().setY(pts[i + 1].y + 1.0), 0.05);
+  }
+  pts.forEach((p, i) => { if (i % 2 === 0 || i === pts.length - 1) member(rm, p, p.clone().setY(p.y + 1.0), 0.05); });
+};
+const rowEdge = (st, t, s, r0, r1) => {
+  const pts = [];
+  for (let r = r0; r <= r1; r++) pts.push(W(st, s, t.o0 + r * t.d, t.y0 + Math.min(r, t.rows - 1) * t.r));
+  return pts;
+};
 function buildGlassPanels() {
   const pos = [];
   for (const [a, b, h] of glassPanels) {
@@ -1231,26 +1245,15 @@ for (const st of STANDS) {
     if (v0) boxL(st, -0.6, a, oE, B, PASS_UNDER, top, blackGlass, { cast: true });
     if (v1) boxL(st, b, L + 0.6, oE, B, PASS_UNDER, top, blackGlass, { cast: true });
     // railings along the tier's sides: up its stepped edges, across the cut-back front rows, and down the side of
-    // the full rows beside them (teal posts and rail, glass infill)
-    const rm = [], rail = pts => {
-      for (let i = 0; i + 1 < pts.length; i++) {
-        glassPanel(pts[i], pts[i + 1], 0.9);
-        member(rm, pts[i].clone().setY(pts[i].y + 1.0), pts[i + 1].clone().setY(pts[i + 1].y + 1.0), 0.05);
-      }
-      pts.forEach((p, i) => { if (i % 2 === 0 || i === pts.length - 1) member(rm, p, p.clone().setY(p.y + 1.0), 0.05); });
-    };
-    const edge = (s, r0, r1) => {
-      const pts = [];
-      for (let r = r0; r <= r1; r++) pts.push(W(st, s, t.o0 + r * t.d, t.y0 + Math.min(r, t.rows - 1) * t.r));
-      return pts;
-    };
+    // the full rows beside them
+    const rm = [];
     [0, 1].forEach(i => {
       const e = st.endTrim && st.endTrim.ends[i], sE = i ? L - 0.03 : 0.03;
-      rail(edge(sE, e ? e.rows : 0, t.rows));
+      rail(rm, rowEdge(st, t, sE, e ? e.rows : 0, t.rows));
       if (!e) return;
       const sIn = i ? L - e.w : e.w, oF = t.o0 + e.rows * t.d + 0.05, yF = t.y0 + e.rows * t.r;
-      rail([W(st, sE, oF, yF), W(st, sIn, oF, yF)]);
-      rail(edge(sIn, 0, e.rows).map((p, r) => r === e.rows ? W(st, sIn, oF, yF) : p));
+      rail(rm, [W(st, sE, oF, yF), W(st, sIn, oF, yF)]);
+      rail(rm, rowEdge(st, t, sIn, 0, e.rows).map((p, r) => r === e.rows ? W(st, sIn, oF, yF) : p));
     });
     instancedMembers(rm, steelBlue, false);
     boxL(st, -0.8, L + 0.8, B, B + 0.35, 10.2, 11.4, whiteBand);
@@ -1274,6 +1277,12 @@ for (const st of STANDS) {
     for (let i = 1; i < boxRows; i++) boxL(st, 0, L, loEnd + 0.35 + i * boxRowD, gO, yF + 0.45, yF + 0.45 + i * 0.2, coreMat);
     standMeshes.push(boxL(st, 0, L, gO, gO + 0.15, yF, yUnder(gO) + 0.1, skyGlass));
     boxL(st, 0, L, gO + 0.15, upEnd, 0, under, coreMat);
+    // railings up both tiers' stepped edges at the end by the media pavilion (H)
+    if (st.kind === 'main') {
+      const rm = [];
+      for (const [key, t] of [['lower', lo], ['upper', up]]) rail(rm, rowEdge(st, t, lowerEnd(st, key) - 0.03, 0, t.rows));
+      instancedMembers(rm, steelBlue, false);
+    }
     // door frames every few panels and the box partitions
     for (let s = 3; s < L - 1; s += 6) boxL(st, s - 0.06, s + 0.06, gO - 0.04, gO + 0.02, yF, yUnder(gO), coreMat);
     // front of the upper tier: LED band on stand E; bare concrete with the club emblem in the middle on the main stand
