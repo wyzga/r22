@@ -608,6 +608,22 @@ function fitRow(ps, a, b, m) {
             else for (let j = a; j < i; j++) ps[j].s += pitch;
           }
         }
+        // where the plan packs a block tighter than its neighbours in the same unbroken run (VIP Lounge over the
+        // tunnel, a few seats in the back rows), the run's seats spread out evenly between its two end seats, so a
+        // row keeps one spacing from stair to stair; the ends, and with them the stairs, stay where they are
+        for (const ps of byRow.values()) {
+          ps.sort((a, b) => a.s - b.s);
+          for (let i = 0; i < ps.length;) {
+            let j = i;
+            while (j + 1 < ps.length && ps[j + 1].s - ps[j].s < 1.8 * pitch) j++;
+            const gaps = []; for (let k = i + 1; k <= j; k++) gaps.push(ps[k].s - ps[k - 1].s);
+            if (gaps.length > 1 && Math.max(...gaps) > 1.15 * Math.min(...gaps)) {
+              const s0 = ps[i].s, step = (ps[j].s - s0) / (j - i);
+              for (let k = i + 1; k < j; k++) ps[k].s = s0 + (k - i) * step;
+            }
+            i = j + 1;
+          }
+        }
       }
     }
     if (key === 'box') { for (const p of list) p.o = rowDepth(t, p.r); continue; }   // (no stairs or exits on the balcony)
