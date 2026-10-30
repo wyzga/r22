@@ -444,7 +444,17 @@ function fitRow(ps, a, b, m) {
       }
       numDir = cov < 0 ? -1 : 1;   // a corner row is numbered on through its sectors, from one side wall to the other
     } else {
-      const ax = Math.abs(st.t.x) > 0.5, dir = ax ? st.t.x : st.t.z, along = p => ax ? p.x : p.y;
+      const ax = Math.abs(st.t.x) > 0.5, dir = ax ? st.t.x : st.t.z;
+      let along = p => ax ? p.x : p.y;
+      if (st.id === 'E') {
+        // the plan leaves an empty column (a stair) between neighbouring sectors; as photographed, the seats run on
+        // through there (the "S" sits across E23/E24) and the stairs are only those through the sectors' middles:
+        // the columns past each such gap close up by its width
+        const xs = [...new Set(list.map(along))].sort((a, b) => a - b), cuts = [];
+        for (let i = 0; i + 1 < xs.length; i++) if (xs[i + 1] - xs[i] > 250) cuts.push([xs[i], xs[i + 1] - xs[i] - 150]);
+        const a = along;
+        along = p => { let v = a(p); for (const [x, c] of cuts) if (a(p) > x) v -= c; return v; };
+      }
       let a0 = Infinity, a1 = -Infinity;
       for (const p of list) { a0 = Math.min(a0, along(p)); a1 = Math.max(a1, along(p)); }
       const L = lowerEnd(st, key), N = Math.round((a1 - a0) / 150) + 1;
@@ -1731,12 +1741,12 @@ const PATTERN = {
   },
 };
 // Stand E as photographed from the pitch (u runs 0 → 1 left to right). The colour blocks are the runs of seats
-// between the stairs, not the ticketing sectors. Lower tier: five blocks 1 · 9 · (red) · 0 · 6;
-// upper tier: seven blocks (blue) · W · I · S · Ł · A · (blue). [u0, u1, colour, character, width of the character in the block]
+// between the stairs through the sectors' middles (each straddling a sector boundary), seven to a tier:
+// lower (blue) · 1 · 9 · (red) · 0 · 6 · (blue); upper (blue) · W · I · S · Ł · A · (blue).
+// [colour, character, width of the character in the block]; the blocks' u ranges are set from the stairs below
 const E_LAYOUT = {
-  lower: [[0, 0.2, COL.red, '1', 0.3], [0.2, 0.4, COL.blue, '9', 0.44], [0.4, 0.6, COL.red], [0.6, 0.8, COL.blue, '0', 0.42], [0.8, 1, COL.red, '6', 0.46]],
-  upper: [[0, 0.14, COL.blue], [0.14, 0.285, COL.blue, 'W', 0.7], [0.285, 0.43, COL.pink, 'I', 0.12], [0.43, 0.585, COL.blue, 'S', 0.44],
-    [0.585, 0.76, COL.pink, 'Ł', 0.58], [0.76, 0.916, COL.blue, 'A', 0.62], [0.916, 1, COL.blue]],
+  lower: [[COL.blue], [COL.red, '1', 0.5], [COL.blue, '9', 0.62], [COL.red], [COL.blue, '0', 0.54], [COL.red, '6', 0.54], [COL.blue]],
+  upper: [[COL.blue], [COL.blue, 'W', 0.58], [COL.pink, 'I', 0.1], [COL.blue, 'S', 0.4], [COL.pink, 'Ł', 0.54], [COL.blue, 'A', 0.58], [COL.blue]],
 };
 // The characters are upright line drawings in white seats: square-cut strokes with rounded corners, a constant
 // ~1.4 m wide (about three seats). Strokes are polylines in a unit box (x right, y up = towards the back).
@@ -1770,9 +1780,17 @@ function glyphMask(ch, gwFrac, wM, hM, stroke) {
 }
 {
   const E = STANDS[1];
-  for (const [key, blocks] of Object.entries(E_LAYOUT)) {
+  for (const [key, list] of Object.entries(E_LAYOUT)) {
+    // block edges at the stairs through the sectors' middles (the exits' centre lines), else at sixths' middles
     const t = E.tiers[key], hM = t.rows * Math.hypot(t.d, t.r);
-    for (const b of blocks) if (b[3]) b[5] = glyphMask(b[3], b[4], (b[1] - b[0]) * E.len, hM, 1.4);
+    let us = E.exits[key].map(e => viewU(E, e.c(0))).sort((a, b) => a - b);
+    if (us.length !== list.length - 1) us = list.slice(1).map((_, i) => (i + 0.5) / (list.length - 1));
+    const edges = [0, ...us, 1];
+    E_LAYOUT[key] = list.map(([col, ch, w], i) => {
+      const b = [edges[i], edges[i + 1], col, ch, w];
+      if (ch) b[5] = glyphMask(ch, w, (b[1] - b[0]) * E.len, hM, 1.4);
+      return b;
+    });
   }
 }
 // The white star of Wisła on stand C, as photographed: the two middle blocks (u 0.3–0.7, either side of
