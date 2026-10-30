@@ -2080,10 +2080,21 @@ function seatColor(st, key, name, s, r) {
   // stand C. A regular star is 1.81 R tall (top point +R, lower points -0.81 R) and 1.90 R wide;
   // R is set separately across (metres) and up the tier (rows) so it fills both ways.
   if (u < STAR_RED[0] || u > STAR_RED[1]) return COL.blue;
-  const Rx = STAR_WIDTH * st.len / (2 * Math.cos(Math.PI / 10)), Ry = (t.rows - 0.4) / 1.809;
-  const x = (u - 0.5) * st.len / Rx, y = (r + 0.5 - 0.2 - 0.809 * Ry) / Ry;
+  const [x, y] = starXY(st, key, s, r);
   if (inStar(x, y)) return COL.white;
   return r > t.rows * 0.55 ? COL.red : COL.pink;   // the lower rows are sun-faded
+}
+// a seat of C in the unit star's frame
+function starXY(st, key, s, r) {
+  const u = viewU(st, s), t = st.tiers[key];
+  const Rx = STAR_WIDTH * st.len / (2 * Math.cos(Math.PI / 10)), Ry = (t.rows - 0.4) / 1.809;
+  return [(u - 0.5) * st.len / Rx, (r + 0.5 - 0.2 - 0.809 * Ry) / Ry];
+}
+// between the star's arms on C: inside the circle through its points, off the star itself (fans there wear black)
+function betweenArms(st, key, s, r) {
+  if (st.id !== 'C') return false;
+  const [x, y] = starXY(st, key, s, r);
+  return x * x + y * y < 1 && !inStar(x, y);
 }
 // the evacuation exit sign over a descent to the pitch: teal, white lettering, the sector in a box
 const gateSigns = new Map();
@@ -2275,7 +2286,7 @@ function buildSector(st, key, name, list) {
     const y = tierY(st, t, p.r, p.s, p.o), w = W(st, p.s, p.o, y), n = frameAt(st, p.s, p.o).n;
     if (!rows.has(p.row)) rows.set(p.row, []);
     rows.get(p.row).push(seats.length);
-    seats.push({ row: p.row, num: p.num, x: w.x, y, z: w.z, nx: n.x, nz: n.z, c: name === 'PRASA' ? COL.blue : key === 'box' ? COL.dark : seatColor(st, key, name, p.s, p.r) });
+    seats.push({ row: p.row, num: p.num, x: w.x, y, z: w.z, nx: n.x, nz: n.z, arms: betweenArms(st, key, p.s, p.r), c:name === 'PRASA' ? COL.blue : key === 'box' ? COL.dark : seatColor(st, key, name, p.s, p.r) });
   }
   // moulded plastic seat (generated texture), tinted per seat by the instance colour
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: TX_SEAT, roughness: 0.45, metalness: 0.05 });
@@ -2343,13 +2354,16 @@ const fans = (() => {
   };
   const m = new THREE.InstancedMesh(geo, mat, list.length);
   const palette = [0xd81e36, 0xffffff, 0x23468f, 0xd81e36, 0x1c1c22, 0xe2e2e2].map(c => new THREE.Color(c));
-  // the C stand behind the goal is the home end: nine fans in ten there wear red
+  // the C stand behind the goal is the home end: nine fans in ten there wear red, except in the middle, between
+  // the star's arms, where most wear black
   const other = palette.filter(c => c !== palette[0] && c !== palette[3]);
-  const colorOf = sec => sec.st.id !== 'C' ? palette[Math.floor(r() * palette.length)] : r() < 0.9 ? palette[0] : other[Math.floor(r() * other.length)];
+  const colorOf = (sec, s) => sec.st.id !== 'C' ? palette[Math.floor(r() * palette.length)]
+    : s.arms ? (r() < 0.85 ? palette[4] : palette[0])
+    : r() < 0.9 ? palette[0] : other[Math.floor(r() * other.length)];
   list.forEach(([sec, i], k) => {
     const s = sec.seats[i];
     dummy.position.set(s.x, s.y, s.z); dummy.rotation.set(0, Math.atan2(s.nx, s.nz) + (r() - 0.5) * 0.3, 0); dummy.scale.set(1, 0.92 + r() * 0.16, 1); dummy.updateMatrix();
-    m.setMatrixAt(k, dummy.matrix); m.setColorAt(k, colorOf(sec));
+    m.setMatrixAt(k, dummy.matrix); m.setColorAt(k, colorOf(sec, s));
     fanIndex.set(sec.name + '|' + i, k);
   });
   dummy.scale.set(1, 1, 1);
