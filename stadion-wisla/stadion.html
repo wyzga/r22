@@ -343,8 +343,9 @@ for (const st of STANDS) {
 const rowS0 = (st, o) => -st.a0 - st.e * o, rowS1 = (st, o) => st.len + st.a1 + st.e * o;
 // The lower tier of a corner leaves an open passage at ground level (for ambulances) beside the goal-end stand:
 // beyond that stand's front line and within PASS of its end, from the pitch out through the corner building, under
-// the walkway. tierS0 / tierS1: the ends of a row of tier key, the passage left out.
-const PASS = 4.5;
+// the walkway. tierS0 / tierS1: the ends of a row of tier key, the passage left out. The goal-end stand's end rows
+// beside it are carried clear of the ground, PASS_UNDER up, widening it.
+const PASS = 4.5, PASS_UNDER = 5.5;
 function passS(st, o) {
   // where the row at depth o enters the passage (the first point, coming from the side stand, inside it)
   const inside = s => { const p = W(st, s, o, 0); return p.x * st.sx >= 61.5 - 1e-6 && p.z * st.sz <= GOAL_HALF + PASS; };
@@ -1188,14 +1189,19 @@ for (const st of STANDS) {
       cuts.push([tn.s0, tn.s1, [[t.o0 + tn.rows * t.d, 0], ...pts, [tierEnd(t), tierTop(t) + 1.1], [tierEnd(t), 0]]]);
     }
     for (const { c, h, rows } of st.exits[key]) cuts.push([c(0) - h, c(0) + h, recessProfile(t, key, rows)]);
-    // (the front rows cut back at the ends, where the plan has no seats in them)
+    // (the front rows cut back at the ends, where the plan has no seats in them; beside a corner's passage the
+    // rows left over that are carried clear of the ground, PASS_UNDER up, so the passage opens on under them)
     const tr = st.endTrim && st.endTrim.key === key ? st.endTrim.ends : [];
+    st.voids = [];
     tr.forEach((e, i) => {
       if (!e) return;
+      const sE = i ? lowerEnd(st, key) : 0, open = Math.abs(W(st, sE, 0, 0).z) > GOAL_HALF - 0.1, yB = open ? PASS_UNDER : 0;
       const pts = [];
       for (let r = e.rows; r < t.rows; r++) { const y = t.y0 + r * t.r; pts.push([t.o0 + r * t.d, y], [t.o0 + (r + 1) * t.d, y]); }
-      const p = [[t.o0 + e.rows * t.d, 0], ...pts, [tierEnd(t), tierTop(t) + 1.1], [tierEnd(t), 0]];
-      cuts.push(i ? [lowerEnd(st, key) - e.w, lowerEnd(st, key), p] : [0, e.w, p]);
+      const p = [[t.o0 + e.rows * t.d, yB], ...pts, [tierEnd(t), tierTop(t) + 1.1], [tierEnd(t), yB]];
+      const span = i ? [sE - e.w, sE] : [0, e.w];
+      cuts.push([...span, p]);
+      if (open) st.voids.push(span);
     });
     cuts.sort((p, q) => p[0] - q[0]);
     let s0 = 0;
@@ -1204,7 +1210,7 @@ for (const st of STANDS) {
       standMeshes.push(extrudeL(st, p, a, b, concrete, { cast: true }));
       s0 = b;
     }
-    standMeshes.push(extrudeL(st, prof, s0, lowerEnd(st, key), concrete, { cast: true }));
+    if (lowerEnd(st, key) > s0 + 1e-6) standMeshes.push(extrudeL(st, prof, s0, lowerEnd(st, key), concrete, { cast: true }));
   }
 
   // perimeter LED boards in front of the stands
@@ -1219,7 +1225,34 @@ for (const st of STANDS) {
   if (st.tiers.single) {
     // goal-end stand: building behind the one tall tier
     const t = T.single, oE = tierEnd(t), top = tierTop(t) + 1.1;
-    boxL(st, -0.6, L + 0.6, oE, B, 0, top, blackGlass, { cast: true });
+    // (left open below PASS_UNDER behind the ends carried over the passages)
+    const v0 = st.voids.find(v => v[0] <= 0), v1 = st.voids.find(v => v[1] >= L - 1e-6), a = v0 ? v0[1] : -0.6, b = v1 ? v1[0] : L + 0.6;
+    boxL(st, a, b, oE, B, 0, top, blackGlass, { cast: true });
+    if (v0) boxL(st, -0.6, a, oE, B, PASS_UNDER, top, blackGlass, { cast: true });
+    if (v1) boxL(st, b, L + 0.6, oE, B, PASS_UNDER, top, blackGlass, { cast: true });
+    // railings along the tier's sides: up its stepped edges, across the cut-back front rows, and down the side of
+    // the full rows beside them (teal posts and rail, glass infill)
+    const rm = [], rail = pts => {
+      for (let i = 0; i + 1 < pts.length; i++) {
+        glassPanel(pts[i], pts[i + 1], 0.9);
+        member(rm, pts[i].clone().setY(pts[i].y + 1.0), pts[i + 1].clone().setY(pts[i + 1].y + 1.0), 0.05);
+      }
+      pts.forEach((p, i) => { if (i % 2 === 0 || i === pts.length - 1) member(rm, p, p.clone().setY(p.y + 1.0), 0.05); });
+    };
+    const edge = (s, r0, r1) => {
+      const pts = [];
+      for (let r = r0; r <= r1; r++) pts.push(W(st, s, t.o0 + r * t.d, t.y0 + Math.min(r, t.rows - 1) * t.r));
+      return pts;
+    };
+    [0, 1].forEach(i => {
+      const e = st.endTrim && st.endTrim.ends[i], sE = i ? L - 0.03 : 0.03;
+      rail(edge(sE, e ? e.rows : 0, t.rows));
+      if (!e) return;
+      const sIn = i ? L - e.w : e.w, oF = t.o0 + e.rows * t.d + 0.05, yF = t.y0 + e.rows * t.r;
+      rail([W(st, sE, oF, yF), W(st, sIn, oF, yF)]);
+      rail(edge(sIn, 0, e.rows).map((p, r) => r === e.rows ? W(st, sIn, oF, yF) : p));
+    });
+    instancedMembers(rm, steelBlue, false);
     boxL(st, -0.8, L + 0.8, B, B + 0.35, 10.2, 11.4, whiteBand);
     boxL(st, -0.8, L + 0.8, B, B + 0.35, top - 1.4, top, whiteBand);
     if (st.id === 'C') {
