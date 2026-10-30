@@ -348,8 +348,8 @@ for (const st of STANDS) {
 const rowS0 = (st, o) => -st.a0 - st.e * o, rowS1 = (st, o) => st.len + st.a1 + st.e * o;
 // The lower tier of a corner leaves an open passage at ground level (for ambulances) beside the goal-end stand:
 // beyond that stand's front line and within PASS of its end, from the pitch out through the corner building, under
-// the upper tier. tierS0 / tierS1: the ends of a row of tier key, the passage left out.
-const PASS = 4.5, PASS_H = 4.8;
+// the walkway. tierS0 / tierS1: the ends of a row of tier key, the passage left out.
+const PASS = 4.5;
 function passS(st, o) {
   // where the row at depth o enters the passage (the first point, coming from the side stand, inside it)
   const inside = s => { const p = W(st, s, o, 0); return p.x * st.sx >= 61.5 - 1e-6 && p.z * st.sz <= GOAL_HALF + PASS; };
@@ -494,14 +494,16 @@ function fitRow(ps, a, b, m) {
       return { c: o => mc + k * (o - mo), h, rows: [g.r0, g.r1] };
     }).sort((p, q) => p.c(tierMid) - q.c(tierMid));   // (in order at mid-depth: on a corner they drift apart with depth)
     // the corners' lower tiers: the plan leaves their front rows nearly empty, and an exit opens there as on the other
-    // lower tiers, halfway between the side stand and the passage (rows from the first without seats to the last
-    // with at most four)
+    // lower tiers (rows from the first without seats to the last with at most four). It is in the run along the side
+    // stand, just short of the bend, square to the rows like the side stand's own exits: at a fixed distance w from
+    // the side stand's end, whatever the depth
     if (st.fan && key === 'lower') {
       const cnt = r => (rows.get(r) || []).length;
       let v0 = 0; while (v0 < t.rows && cnt(v0)) v0++;
       let v1 = v0; while (v1 + 1 < t.rows && cnt(v1 + 1) <= 4) v1++;
-      const oM = rowDepth(t, (v0 + v1) / 2), c = (tierS0(st, key, oM) + tierS1(st, key, oM)) / 2;
-      if (v1 > v0 && v1 + 1 < t.rows) st.exits.lower.push({ c: () => c, h: 1.7, rows: [v0, v1] });
+      const h = 1.7, side = st.endS0 ? st.a1 : st.a0, w = side + TAU * (t.o0 + v0 * t.d) - h - 0.3;
+      const c = st.endS0 ? o => rowS1(st, o) - w : o => rowS0(st, o) + w;
+      if (v1 > v0 && v1 + 1 < t.rows) st.exits.lower.push({ c, h, rows: [v0, v1] });
     }
     // the players' tunnel: the gap under the front rows of the main stand
     if (st.kind === 'main' && key === 'lower') {
@@ -1115,7 +1117,7 @@ for (const st of STANDS) {
       standMeshes.push(fanSolid(st, prof, concrete, { cast: true, sA: from, sB: b1, endPts: !st.endS0 || !ex.length ? endPts : null }));
     }
     // the passage: the lower tier ends in a stepped wall, railed along its top (teal posts and rail, glass infill);
-    // the building over it is cut to a portal PASS_H high
+    // behind the tier it runs on under the walkway, a rectangular opening as high as the tier's top
     const pEdge = o => st.endS0 ? tierS0(st, 'lower', o) : tierS1(st, 'lower', o), inw = st.endS0 ? 0.08 : -0.08;
     {
       const pts = [], rm = [];
@@ -1130,17 +1132,29 @@ for (const st of STANDS) {
       }
       instancedMembers(rm, steelBlue, false);
     }
-    // a profile of the upper structure swept over the corner up to edgeU, with the passage left out below PASS_H
+    // a profile of the upper structure swept over the corner up to edgeU, with the passage left out below PH
     // (two pieces: beside the passage and over it)
+    const bt = st.boxTier, gO = bt ? bt.o0 + bt.rows * bt.d : loEnd + 1.15, yF = tierTop(lo), PH = yF - 0.15;
     const near = st.endS0 ? o => Math.max(st.edgeU(o), pEdge(o)) : o => Math.min(st.edgeU(o), pEdge(o));
     const cornerPiece = (pts, mat, opt = {}) => {
       const beside = st.endS0 ? { sA: near } : { sB: near }, over = st.endS0 ? { sA: st.edgeU, sB: near } : { sA: near, sB: st.edgeU };
       const m = fanSolid(st, pts, mat, { ...opt, ...beside });
-      fanSolid(st, pts.map(([o, y]) => [o, Math.max(y, PASS_H)]), mat, { ...opt, ...over });
+      fanSolid(st, pts.map(([o, y]) => [o, Math.max(y, PH)]), mat, { ...opt, ...over });
       return m;
     };
+    // past edgeU, on to the goal-end stand, the walkway and the skybox band carry on over the passage (the top of its
+    // opening), with the building behind them up to the band's top; beside the passage, under them, a wall closes
+    // the space behind the lower tier
+    {
+      const goal = o => st.endS0 ? rowS0(st, o) : rowS1(st, o), span = st.endS0 ? { sA: goal, sB: st.edgeU } : { sA: st.edgeU, sB: goal };
+      const yB = up.y0 - 0.5;
+      fanSolid(st, [[loEnd, PH], [gO, PH], [gO, yF], [loEnd, yF]], coreMat, span);
+      standMeshes.push(fanSolid(st, [[gO, PH], [gO + 0.15, PH], [gO + 0.15, yB], [gO, yB]], skyGlass, span));
+      fanSolid(st, [[gO + 0.15, PH], [upEnd, PH], [upEnd, yB], [gO + 0.15, yB]], coreMat, span);
+      fanSolid(st, [[upEnd, PH], [st.back, PH], [st.back, yB], [upEnd, yB]], blackGlass, { cast: true, ...span });
+      fanSolid(st, [[loEnd, 0], [loEnd, PH], [st.back, PH], [st.back, 0]], coreMat, st.endS0 ? { sA: pEdge, sB: near } : { sA: near, sB: pEdge });
+    }
     // walkway behind the lower tier; in corner B the skybox balcony (SK23–SK25) with its four low steps
-    const bt = st.boxTier, gO = bt ? bt.o0 + bt.rows * bt.d : loEnd + 1.15, yF = tierTop(lo);
     cornerPiece([[gO + 0.15, 0], [gO + 0.15, up.y0 - 1.4], [upEnd, tierTop(up) - 1.8], [upEnd, 0]], coreMat);
     cornerPiece([[loEnd, yF - 0.15], [gO, yF - 0.15], [gO, yF], [loEnd, yF]], coreMat);
     if (bt) for (let i = 0; i < bt.rows; i++) cornerPiece([[bt.o0 + i * bt.d, yF], [gO, yF], [gO, bt.y0 + i * bt.r], [bt.o0 + i * bt.d, bt.y0 + i * bt.r]], coreMat);
