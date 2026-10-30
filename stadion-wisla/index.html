@@ -849,11 +849,28 @@ sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.06;
 scene.add(sun);
 
+// sky: a gradient from the pale horizon up to blue, with soft, sparse fair-weather clouds drawn on a flat layer
+// overhead (value-noise fbm), thinning out towards the horizon; at night they turn dark and faint
 const skyMat = new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,
-  uniforms: { top: { value: new THREE.Color(0x4f86c9) }, bottom: { value: new THREE.Color(0xdce8f4) } },
+  uniforms: { top: { value: new THREE.Color(0x4f86c9) }, bottom: { value: new THREE.Color(0xdce8f4) }, cloud: { value: new THREE.Color(0xffffff) }, cover: { value: 0.85 } },
   vertexShader: 'varying vec3 vP; void main(){ vP = (modelMatrix*vec4(position,1.)).xyz; gl_Position = projectionMatrix*viewMatrix*vec4(vP,1.); }',
-  fragmentShader: 'uniform vec3 top; uniform vec3 bottom; varying vec3 vP; void main(){ float h = clamp(normalize(vP).y*1.6+0.05,0.,1.); gl_FragColor = vec4(mix(bottom, top, pow(h,0.7)),1.); }',
+  fragmentShader: `uniform vec3 top; uniform vec3 bottom; uniform vec3 cloud; uniform float cover; varying vec3 vP;
+    float h21(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
+    float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
+      return mix(mix(h21(i), h21(i+vec2(1.,0.)), f.x), mix(h21(i+vec2(0.,1.)), h21(i+vec2(1.,1.)), f.x), f.y); }
+    float fbm(vec2 p){ float s = 0., a = .5; for (int i = 0; i < 6; i++) { s += a*vn(p); p = p*2.03 + vec2(17.1, 9.2); a *= .5; } return s; }
+    void main(){
+      vec3 d = normalize(vP); float h = clamp(d.y*1.6+0.05,0.,1.);
+      vec3 c = mix(bottom, top, pow(h,0.7));
+      if (d.y > 0.) {
+        vec2 q = d.xz/(d.y+0.15)*1.3 + vec2(3.,7.);
+        float n = fbm(q), k = smoothstep(0.56, 0.8, n)*smoothstep(0.02, 0.3, d.y);
+        float shade = 0.86 + 0.14*smoothstep(0.5, 0.9, fbm(q*1.7 + vec2(-0.08, 0.05)));
+        c = mix(c, cloud*shade, k*cover);
+      }
+      gl_FragColor = vec4(c,1.);
+    }`,
 });
 const skyMesh = new THREE.Mesh(new THREE.SphereGeometry(2000, 32, 16), skyMat);
 scene.add(skyMesh);
@@ -880,9 +897,30 @@ const loadTex = (url, mirror) => new Promise(res => texLoader.load(ASSET(url), t
   t.anisotropy = renderer.capabilities.getMaxAnisotropy();
   res(t);
 }, undefined, () => res(null)));
+// bare concrete, generated here: light grey with soft cloudy mottling, fine grain and small air pores, tiling
+// seamlessly (light on average, so the colours of the materials it is laid on stay much as they were)
+const concreteTex = canvasTex(512, 512, (g, w, h) => {
+  const r = rng(7), wrap = (x, y, f) => { for (const dx of [-w, 0, w]) for (const dy of [-h, 0, h]) f(x + dx, y + dy); };
+  g.fillStyle = "#f3f2ef"; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 90; i++) {
+    const x = r() * w, y = r() * h, rad = 30 + r() * 110, c = r() < 0.55 ? "90,88,84" : "255,255,255", a = 0.05 + r() * 0.08;
+    wrap(x, y, (cx, cy) => {
+      const gr = g.createRadialGradient(cx, cy, 0, cx, cy, rad); gr.addColorStop(0, `rgba(${c},${a})`); gr.addColorStop(1, `rgba(${c},0)`);
+      g.fillStyle = gr; g.fillRect(cx - rad, cy - rad, rad * 2, rad * 2);
+    });
+  }
+  const im = g.getImageData(0, 0, w, h), d = im.data;
+  for (let i = 0; i < d.length; i += 4) { const n = (r() + r() + r() - 1.5) * 16; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+  g.putImageData(im, 0, 0);
+  for (let i = 0; i < 700; i++) {
+    const x = r() * w, y = r() * h, rad = 0.4 + r() * r() * 1.4;
+    g.fillStyle = `rgba(70,68,64,${0.15 + r() * 0.25})`;
+    wrap(x, y, (cx, cy) => { g.beginPath(); g.arc(cx, cy, rad, 0, 7); g.fill(); });
+  }
+});
 // herb.svg (the club crest) is optional: present only in the local copy next to index.html
 const [TX_GRASS, TX_CONCRETE, TX_FACADE, TX_ROOF, TX_PARK, TX_CREST] = await Promise.all([
-  loadTex('tex/grass.jpg', true), null, null, loadTex('tex/roof.jpg'), loadTex('tex/park.jpg', true), loadTex('herb.svg'),
+  loadTex('tex/grass.jpg', true), concreteTex, null, loadTex('tex/roof.jpg'), loadTex('tex/park.jpg', true), loadTex('herb.svg'),
 ]);
 // the seat's moulded plastic: white (tinted per seat), a square darker rim and two pressed ridges across
 const TX_SEAT = canvasTex(256, 256, (g, w, h) => {
@@ -1356,7 +1394,7 @@ function ledCanvas(texts, colors) {
 }
 const boardTex = canvasTex(2048, 80, ledCanvas([SPONSOR, 'WISŁA KRAKÓW', SPONSOR, 'TS WISŁA · OD 1906'], [null, ['#c8172e', '#fff'], null, ['#0f1d3d', '#fff']]));
 // the front of the upper tiers all round (side stands and corners): bare concrete, no advertising
-const fasciaMat = new THREE.MeshStandardMaterial({ color: 0x80848a, roughness: 0.9 });
+const fasciaMat = texMat(TX_CONCRETE, 4, { color: 0x80848a, roughness: 0.9 });
 const ledMats = [];
 function ledMat(tex, w, tileLen) {
   const map = tex.clone(); map.repeat.set(w / tileLen, 1); map.needsUpdate = true;
@@ -1611,7 +1649,7 @@ for (const st of STANDS) {
       // between the booths, as photographed: a gallery at the booths' floor level, glass railing along its front,
       // the glass wall behind it in dark frames between light concrete columns, and on it the staff's places, two
       // rows of blue seats on a step, in two runs either side of the middle (left out above the press stand)
-      const g0 = 19, g1 = L - 19, yG = yT + 2.05, colMat = new THREE.MeshStandardMaterial({ color: 0x9a9d9f, roughness: 0.9 });
+      const g0 = 19, g1 = L - 19, yG = yT + 2.05, colMat = texMat(TX_CONCRETE, 4, { color: 0x9a9d9f, roughness: 0.9 });
       boxL(st, g0, g1, oF - 0.1, upEnd, yT + 1.5, yG, colMat, { cast: true });
       boxL(st, g0, g1, upEnd - 1.25, upEnd, yG, yG + 0.35, coreMat);
       const rm = [], nR = Math.ceil((g1 - g0) / 2);
@@ -1662,7 +1700,7 @@ for (const st of STANDS) {
         const FL = -0.6, s0 = s - hw, s1 = s + hw, o0 = -2.8, o1 = -0.2;
         const cs = [W(st, s0, o0, 0), W(st, s1, o1, 0)];
         PITS.push([Math.min(cs[0].x, cs[1].x), Math.max(cs[0].x, cs[1].x), Math.min(cs[0].z, cs[1].z), Math.max(cs[0].z, cs[1].z)]);
-        const concrete = new THREE.MeshStandardMaterial({ color: 0x6b6f75, roughness: 0.95 }), asphalt = new THREE.MeshStandardMaterial({ color: 0x3b3e44, roughness: 1 });
+        const concrete = texMat(TX_CONCRETE, 3, { color: 0x6b6f75, roughness: 0.95 }), asphalt = new THREE.MeshStandardMaterial({ color: 0x3b3e44, roughness: 1 });
         const navy = new THREE.MeshStandardMaterial({ color: 0x1d3a7a, roughness: 0.6 }), seatRed = new THREE.MeshStandardMaterial({ color: 0xc8283a, roughness: 0.7 });
         boxL(st, s0, s1, o0, o1, FL - 0.03, FL, asphalt);                                   // floor
         boxL(st, s0, s1, o0, o0 + 0.2, FL, 0.35, concrete, { cast: true });                // kerb on the pitch side, 0.35 m over the turf
@@ -3142,6 +3180,7 @@ const setNight = (() => {
   return on => {
     lights.visible = on;
     skyMat.uniforms.top.value.set(on ? 0x02050d : day.top); skyMat.uniforms.bottom.value.set(on ? 0x1b2236 : day.bottom);
+    skyMat.uniforms.cloud.value.set(on ? 0x262c3b : 0xffffff); skyMat.uniforms.cover.value = on ? 0.5 : 0.85;
     scene.fog.color.set(on ? 0x0b1020 : day.fog);
     hemi.color.set(on ? 0x8d97a8 : day.hemi[0]); hemi.groundColor.set(on ? 0x2c4220 : day.hemi[1]); hemi.intensity = on ? 0.7 : day.hemi[2];
     sun.color.set(on ? 0xfff8ec : day.sun[0]); sun.intensity = on ? 0.35 : day.sun[1];
