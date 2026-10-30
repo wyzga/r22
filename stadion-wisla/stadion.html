@@ -568,6 +568,24 @@ function fitRow(ps, a, b, m) {
         pitch = Math.min(L / N, near / uH, far / (N - uH));
         for (const p of list) p.s = sH + k * ((along(p) - a0) / 150 + 0.5 - uH) * pitch;
       }
+      if (st.id === 'E' || st.id === 'A') {
+        // a single seat missing from a row of the plan (A22/A21 and VIP Royal/H22, rows 14–21) would leave an empty
+        // column: the seats close up across it, the run of them with the wider gap beyond it (the press stand's)
+        // moving over
+        const byRow = new Map();
+        for (const p of list) { if (!byRow.has(p.r)) byRow.set(p.r, []); byRow.get(p.r).push(p); }
+        for (const ps of byRow.values()) {
+          ps.sort((a, b) => a.s - b.s);
+          const d = i => i > 0 && i < ps.length ? ps[i].s - ps[i - 1].s : 0;
+          for (let i = 1; i < ps.length; i++) if (Math.abs(d(i) - 2 * pitch) < 0.2 * pitch) {
+            let a = i - 1, b = i;
+            while (a > 0 && d(a) < 1.5 * pitch) a--;
+            while (b + 1 < ps.length && d(b + 1) < 1.5 * pitch) b++;
+            if (d(b + 1) >= d(a)) for (let j = i; j <= b; j++) ps[j].s -= pitch;
+            else for (let j = a; j < i; j++) ps[j].s += pitch;
+          }
+        }
+      }
     }
     if (key === 'box') { for (const p of list) p.o = rowDepth(t, p.r); continue; }   // (no stairs or exits on the balcony)
     const rows = new Map();
@@ -2005,8 +2023,8 @@ function seatColor(st, key, name, s, r) {
     if (st.press && key === st.press.key && s > st.press.s0 && s < st.press.s1) return COL.blue;   // the press block
     // the two back rows of the lower tier, in front of the glazed boxes, are dark padded VIP seats
     if (key === 'lower' && r >= t.rows - 2 && u > 0.1 && u < 0.9) return COL.dark;
-    // H11's front row is blue from the stair through the sector out to the wing's end
-    if (key === 'lower' && r === 0 && name === 'H11' && s > Math.max(...st.stairs.lower.filter(g => g[0] === 0).map(g => g[2]))) return COL.blue;
+    // H11 is blue in every row from the middle of its entrance (the stair from the pitch) out to the wing's end
+    if (key === 'lower' && name === 'H11' && s > Math.max(...st.stairs.lower.filter(g => g[0] === 0).map(g => (g[1] + g[2]) / 2))) return COL.blue;
     return key === 'upper' ? PATTERN.A.upper(u, (r + 0.5) / t.rows) : band(Math.max(0, u), PATTERN.A.lower);   // the H11 wing goes on past u = 0
   }
   if (st.id === 'E') {
