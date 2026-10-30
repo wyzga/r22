@@ -3337,10 +3337,10 @@ const match = (() => {
   const root = new THREE.Group(); root.visible = false; scene.add(root);
   const m = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 });
   const KITS = {
-    home: { shirt: m(0xd81e36), shorts: m(0xffffff), socks: m(0xffffff), name: 'Wisła' },
+    home: { shirt: m(0xd81e36), shorts: m(0xffffff), socks: m(0xffffff), name: 'Wisła', star: true },
     away: { shirt: m(0xf4f4f4), shorts: m(0x111114), socks: m(0x111114), name: 'Goście' },
     // the keepers stand out from both teams: Wisła's in yellow, the visitors' in pink; the officials all in black
-    homeGK: { shirt: m(0xf2c81e), shorts: m(0xe2b410), socks: m(0xf2c81e) },
+    homeGK: { shirt: m(0xf2c81e), shorts: m(0xe2b410), socks: m(0xf2c81e), star: true },
     awayGK: { shirt: m(0xf27ab4), shorts: m(0xe0609e), socks: m(0xf27ab4) },
     ref: { shirt: m(0x15161a), shorts: m(0x15161a), socks: m(0x15161a) },
   };
@@ -3368,9 +3368,30 @@ const match = (() => {
     for (const [mat, gs] of sets) grp.add(new THREE.Mesh(mergeGeometries(gs), mat));
   };
 
+  // Wisła's white five-pointed star on the left of the chest (the figure faces +z, so its left is +x)
+  const gStar = (() => {
+    const sh = new THREE.Shape();
+    for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 0.019 : 0.05; i ? sh.lineTo(Math.cos(a) * r, Math.sin(a) * r) : sh.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
+    return new THREE.ShapeGeometry(sh);
+  })(), starWhite = m(0xffffff);
+  // shirt numbers: 1–11 in a strip of cells, white on Wisła's red, near-black on the other shirts
+  const numberTex = ink => canvasTex(704, 64, (g, w, h) => {
+    g.fillStyle = ink; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '700 54px "Arial Narrow", Arial, sans-serif';
+    for (let n = 1; n <= 11; n++) g.fillText(String(n), (n - 0.5) * 64, h / 2 + 3);
+  }, false);
+  const numberMats = { light: new THREE.MeshStandardMaterial({ map: numberTex('#ffffff'), alphaTest: 0.5, roughness: 0.85 }),
+    dark: new THREE.MeshStandardMaterial({ map: numberTex('#15161a'), alphaTest: 0.5, roughness: 0.85 }) };
+  const backNumber = (n, mat) => {
+    const g = new THREE.PlaneGeometry(0.24, 0.24), uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setX(i, (n - 1 + uv.getX(i)) / 11);
+    const o = new THREE.Mesh(g, mat); o.position.set(0, 1.25, -0.132); o.rotation.y = Math.PI;   // on the back, read from behind
+    return o;
+  };
+
   function makePlayer(kit) {
     const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
-    part(gTorso, kit.shirt, 0, 1.205, 0, body); part(gShorts, kit.shorts, 0, 0.8, 0, body); part(gHead, skin, 0, 1.62, 0, body);
+    part(gTorso, kit.shirt, 0, 1.205, 0, body);
+    if (kit.star) part(gStar, starWhite, 0.11, 1.37, 0.132, body); part(gShorts, kit.shorts, 0, 0.8, 0, body); part(gHead, skin, 0, 1.62, 0, body);
     const hair = HAIR[Math.floor(Math.random() * HAIR.length)];   // a cap over the top and down the back (the face looks along +z)
     part(gCap, hair, 0, 1.75, -0.01, body); part(gNape, hair, 0, 1.67, -0.11, body);
     const limb = (x, y, add) => { const p = new THREE.Group(); p.position.set(x, y, 0); body.add(p); add(p); return p; };
@@ -3388,6 +3409,7 @@ const match = (() => {
     const dir = team === 'home' ? 1 : -1;
     FORM.forEach(([ax, az], i) => {
       const mesh = makePlayer(KITS[i === 0 ? team + 'GK' : team]); root.add(mesh.g);
+      mesh.body.add(backNumber(i + 1, team === 'home' && i > 0 ? numberMats.light : numberMats.dark));   // the keeper is 1, then 2–11 by position
       players.push({ ...mesh, team, dir, idx: i, gk: i === 0, bx: dir * ax * (HX - 3), bz: dir * az * (HZ - 4),
         x: 0, z: 0, vx: 0, vz: 0, face: dir > 0 ? Math.PI / 2 : -Math.PI / 2, ph: Math.random() * 6, cel: 0 });
     });
@@ -3420,7 +3442,7 @@ const match = (() => {
   const tm = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 });
   const navyTrack = tm(0x1b2742);
   const SIDE = {
-    home: { bench: BENCHES[0], sign: 1, jacket: { shirt: tm(0xc8102e), shorts: navyTrack, socks: navyTrack, legs: navyTrack, arms: tm(0xc8102e) },
+    home: { bench: BENCHES[0], sign: 1, jacket: { shirt: tm(0xc8102e), shorts: navyTrack, socks: navyTrack, legs: navyTrack, arms: tm(0xc8102e), star: true },
       bib: { shirt: new THREE.MeshStandardMaterial({ color: 0xd8ff1c, emissive: 0x6a8a00, roughness: 0.5 }), shorts: KITS.home.shorts, socks: KITS.home.socks } },
     away: { bench: BENCHES[1], sign: -1, jacket: { shirt: tm(0xe9e9e6), shorts: tm(0x111114), socks: tm(0x111114), legs: tm(0x111114), arms: tm(0xe9e9e6) },
       bib: { shirt: new THREE.MeshStandardMaterial({ color: 0xff7414, emissive: 0x8a2e00, roughness: 0.5 }), shorts: KITS.away.shorts, socks: KITS.away.socks } },
