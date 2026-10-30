@@ -79,6 +79,46 @@
   .f-msg { margin: 0; min-height: 0; font-size: 12.5px; color: var(--red); }
   .f-msg:empty { display: none; }
 
+  /* pickers: a button in place of each select, opening a card of chips */
+  .pk-btn {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0;
+    font: 500 14px var(--sans); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 9px 10px 9px 13px; cursor: pointer; line-height: 1.1; text-align: left;
+  }
+  .pk-btn .pk-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pk-btn svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+  .pk-btn[aria-expanded="true"] { border-color: var(--ink); }
+  .pk-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .pk-btn:hover:not(:disabled) { border-color: var(--ink); }
+  .pk-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .pk-btn.pk-empty .pk-val { color: var(--muted); }
+  .pk-btn:disabled { background: var(--paper-muted); color: var(--muted); cursor: default; }
+  .finder .pk-btn { width: 100%; border-radius: 8px; padding-block: 11px; font-size: 15px; }
+  .bar .pk-btn { width: 210px; font-weight: 600; }
+  .pk-pop {
+    position: fixed; z-index: 30; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden;
+    background: var(--paper); border: 1px solid var(--line); border-top: 3px solid var(--red); border-radius: 8px;
+    box-shadow: 0 18px 44px rgba(16, 24, 32, 0.26); font-family: var(--sans); color: var(--ink);
+  }
+  .pk-pop[hidden] { display: none; }
+  .pk-head { display: grid; gap: 8px; padding: 10px 12px 9px; border-bottom: 1px solid var(--line); }
+  .pk-head span { font: 600 11px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--gold-ink); }
+  .pk-find { font: 500 14px var(--sans); padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; outline: 0; color: var(--ink); }
+  .pk-find:focus { border-color: var(--ink); }
+  .pk-list { overflow: auto; padding: 8px 12px 12px; display: grid; gap: 10px; outline: 0; scrollbar-width: thin; }
+  .pk-group { display: grid; gap: 6px; }
+  .pk-glbl { font: 600 10.5px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); padding-top: 2px; }
+  .pk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 5px; }
+  .pk-num .pk-grid { grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); }
+  .pk-chip {
+    font: 600 13px var(--sans); font-variant-numeric: tabular-nums; color: var(--ink); background: var(--paper-muted);
+    border: 1px solid transparent; border-radius: 5px; padding: 8px 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pk-chip:hover, .pk-chip.pk-active { border-color: var(--ink); background: var(--paper); }
+  .pk-chip.pk-active { box-shadow: 0 0 0 2px var(--gold); }
+  .pk-chip[aria-selected="true"] { background: var(--navy); border-color: var(--navy); color: #fff; }
+  .pk-none { margin: 6px 0; font-size: 13px; color: var(--muted); }
+
   /* ticket card */
   .ticket { grid-column: 2; grid-row: 1 / span 2; align-self: start; width: 340px; max-height: 100%; overflow: auto; box-sizing: border-box; padding: 0; scrollbar-width: thin; }
   .t-top { padding: 14px 16px 12px; display: grid; gap: 12px; }
@@ -145,7 +185,8 @@
     .brand h1 { font-size: 20px; }
     body.seated .brand .hint, body.seated .brand .src, body.seated .brand .kicker, body.seated .finder { display: none; }
     .finder { margin-top: 6px; padding-top: 8px; gap: 5px; }
-    .f-or, .finder > .f-lbl[for="fSector"], #fSector, .f-two, .finder .f-see { display: none; }
+    .f-or, .finder > .f-lbl[for="fSectorPk"], #fSectorPk, .f-two, .finder .f-see { display: none; }
+    .bar .pk-btn { width: 160px; }
     .ticket { grid-column: 1; grid-row: 2; align-self: end; width: 100%; max-height: 58vh; }
     .ticket:not(.open) .perf, .ticket:not(.open) .t-body { display: none; }
     .t-more { display: inline-block !important; }
@@ -309,7 +350,7 @@ const STANDS = [
   {
     id: 'A', label: 'Trybuna główna A', kind: 'main', roof: 'truss', wings: [46, 4.5], P0: [53.5, 0, -41.5], t: [-1, 0, 0], n: [0, 0, 1], len: 107, back: 35, roofY: 26,
     tiers: TIERS_A, openEnds: [0, 107],   // the pavilion end stays open, as photographed
-    lowerExt: 3.5,   // the lower tier runs 3.5 m on past the stand's end into corner H: the H11 wing
+    lowerExt: 0.5,   // the lower tier runs on past the stand's end into corner H, to just beyond the H11 wing's seats
   },
   {
     id: 'E', label: 'Trybuna E', kind: 'masts', roof: 'truss', wings: [46, 46], P0: [-53.5, 0, 41.5], t: [1, 0, 0], n: [0, 0, -1], len: 107, back: 35, roofY: 26,
@@ -493,11 +534,28 @@ function fitRow(ps, a, b, m) {
         const a = along;
         along = p => { let v = a(p); for (const [x, c] of cuts) if (a(p) > x) v -= c; return v; };
       }
+      if (st.id === 'G') {
+        // the away sector: G3 and G4 meet without a gap in the plan, but as photographed a stair three seats wide,
+        // railed on both sides, runs up between them from the front row to the back; the stand's seats close up
+        // (a smaller pitch) to make room
+        const a = along, g3 = list.filter(p => p.name === 'G3').map(a), g4 = list.filter(p => p.name === 'G4').map(a);
+        if (g3.length && g4.length) {
+          const lo3 = Math.min(...g3) > Math.max(...g4), x = lo3 ? (Math.min(...g3) + Math.max(...g4)) / 2 : (Math.max(...g3) + Math.min(...g4)) / 2;
+          const c = 4 * 150 - (lo3 ? Math.min(...g3) - Math.max(...g4) : Math.min(...g4) - Math.max(...g3));
+          along = p => a(p) > x ? a(p) + c : a(p);
+          st.awayGap = { key, x, c };
+        }
+      }
       let a0 = Infinity, a1 = -Infinity;
       for (const p of list) { a0 = Math.min(a0, along(p)); a1 = Math.max(a1, along(p)); }
       const L = lowerEnd(st, key), N = Math.round((a1 - a0) / 150) + 1;
       pitch = L / N;
       for (const p of list) { const u = ((along(p) - a0) / 150 + 0.5) * pitch; p.s = dir > 0 ? u : L - u; }
+      if (st.awayGap && st.awayGap.key === key) {
+        // (the stair's sides: half a seat out from the seats either side of it)
+        const g = st.awayGap, ss = [g.x - 75, g.x + g.c + 75].map(v => { const u = ((v - a0) / 150 + 0.5) * pitch; return dir > 0 ? u : L - u; });
+        g.s0 = Math.min(...ss); g.s1 = Math.max(...ss);
+      }
       if (st.kind === 'main') {
         // on the main stand the players' tunnel (the widest gap in the plan's front row) stays on the halfway line,
         // all tiers lined up with it (the lower tier runs on into the H wing at one end only): one pitch, small
@@ -1384,6 +1442,8 @@ for (const st of STANDS) {
       rail(rm, [W(st, sE, oF, yF), W(st, sIn, oF, yF)]);
       rail(rm, rowEdge(st, t, sIn, 0, e.rows).map((p, r) => r === e.rows ? W(st, sIn, oF, yF) : p));
     });
+    // both sides of the stair between G3 and G4 (the away sector), front row to back
+    if (st.awayGap) for (const sg of [st.awayGap.s0, st.awayGap.s1]) rail(rm, rowEdge(st, t, sg, 0, t.rows));
     instancedMembers(rm, steelBlue, false);
     boxL(st, -0.8, L + 0.8, B, B + 0.35, 10.2, 11.4, whiteBand);
     boxL(st, -0.8, L + 0.8, B, B + 0.35, top - 1.4, top, whiteBand);
@@ -1607,7 +1667,7 @@ instancedMembers(members.cable, cableMat, false);
     return m;
   };
   const H = 5, plinthMat = texMat(TX_CONCRETE, 4, { color: 0xb9b8b2, roughness: 0.95 });
-  const pts = [[-57.2, -37.8], [-61.5, -33.5], [-79, -33.5], [-79, -61], [-57.2, -61]];   // clear of the H11 wing (x > -57)
+  const pts = [[-54, -41], [-61.5, -33.5], [-79, -33.5], [-79, -61], [-54, -61]];   // up to the end of the H11 wing (x > -54)
   const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, z))), { depth: H, bevelEnabled: false });
   g.rotateX(Math.PI / 2); g.translate(0, H, 0);
   add(new THREE.Mesh(g, plinthMat), { cast: true });
@@ -1638,7 +1698,7 @@ instancedMembers(members.cable, cableMat, false);
   const rm = []; for (const [p, q] of rails) member(rm, p, q, 0.05);
   instancedMembers(rm, blue, false);
   // the glass drum
-  const R = 12, top = H + 12, rnd = rng(7);
+  const R = 10, top = H + 12, rnd = rng(7);
   const drum = canvasTex(2048, 512, (c, w, h) => {
     const cols = 48, rows = 10, cw = w / cols, rh = h / rows, shades = ['#3f78c0', '#4a84cc', '#3a70b8', '#5590d4', '#3466a8', '#669fdb'];
     for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
@@ -1905,6 +1965,8 @@ function seatColor(st, key, name, s, r) {
     if (st.press && key === st.press.key && s > st.press.s0 && s < st.press.s1) return COL.blue;   // the press block
     // the two back rows of the lower tier, in front of the glazed boxes, are dark padded VIP seats
     if (key === 'lower' && r >= t.rows - 2 && u > 0.1 && u < 0.9) return COL.dark;
+    // H11's front row is blue from the stair through the sector out to the wing's end
+    if (key === 'lower' && r === 0 && name === 'H11' && s > Math.max(...st.stairs.lower.filter(g => g[0] === 0).map(g => g[2]))) return COL.blue;
     return key === 'upper' ? PATTERN.A.upper(u, (r + 0.5) / t.rows) : band(Math.max(0, u), PATTERN.A.lower);   // the H11 wing goes on past u = 0
   }
   if (st.id === 'E') {
@@ -1919,7 +1981,8 @@ function seatColor(st, key, name, s, r) {
   if (inStar(x, y)) return COL.white;
   return r > t.rows * 0.55 ? COL.red : COL.pink;   // the lower rows are sun-faded
 }
-// Stairs and exits from the plan's gaps. The stair treads are light concrete (yellow on stand G), one slab on
+// Stairs and exits from the plan's gaps. The stair treads are light concrete (yellow on stand G, but for the grey
+// concrete stair between the away sector and the home end), one slab on
 // each row a stair crosses, merged into one mesh per stand. Exits as photographed (E13): the recess cut into the
 // rows with a flat landing, glass double doors in its back wall under a green exit sign, and low railings (teal
 // posts and rail, glass infill) round its edges.
@@ -1927,11 +1990,12 @@ function seatColor(st, key, name, s, r) {
   const stairMat = texMat(TX_CONCRETE, 3, { color: 0xd4d8dd, roughness: 0.9 });
   const yellow = new THREE.MeshStandardMaterial({ color: 0xf0c22e, roughness: 0.8 });
   for (const st of STANDS) {
-    const treads = [];
+    const treads = [], plain = [];
     for (const [key, list] of Object.entries(st.stairs)) {
       const t = st.tiers[key];
       for (const [r, a, b] of [...list, ...(st.steps[key] || [])]) {
         if (b - a < 0.2) continue;
+        const away = st.awayGap && key === st.awayGap.key && a > st.awayGap.s0 - 0.3 && b < st.awayGap.s1 + 0.3;
         const oF = t.o0 + r * t.d, oM = oF + t.d / 2;
         // pieces of up to 2 m, split at a corner's bends (and following the lower corner rows' rise)
         const cuts = [a, b];
@@ -1944,7 +2008,7 @@ function seatColor(st, key, name, s, r) {
             const g = new THREE.BoxGeometry(w, t.r, t.d);
             g.applyQuaternion(frameAt(st, sm, oM).q);
             const p = W(st, sm, oM, y - t.r / 2);
-            treads.push(g.translate(p.x, p.y, p.z));
+            (away ? plain : treads).push(g.translate(p.x, p.y, p.z));
           }
         }
       }
@@ -1965,6 +2029,7 @@ function seatColor(st, key, name, s, r) {
       if (rm.length) instancedMembers(rm, steelBlue, false);
     }
     if (treads.length) add(new THREE.Mesh(mergeGeometries(treads), st.id === 'G' ? yellow : stairMat));
+    if (plain.length) add(new THREE.Mesh(mergeGeometries(plain), stairMat));
     for (const [key, list] of Object.entries(st.exits)) {
       const t = st.tiers[key], rails = [];
       for (const { c, h, rows: [v0, v1], down } of list) {
@@ -2526,6 +2591,125 @@ const syncFinder = ({ sec, idx }) => {
   const s = sec.seats[idx];
   fSector.value = sec.name; fFillRows(sec); fRow.value = s.row; fFillSeats(sec, s.row); fSeat.value = s.num; fUpdate();
 };
+
+// Pickers: each <select> stays as the source of truth (value, options, change events) but is shown as a button
+// opening a card of chips: sectors grouped by stand with a filter, rows and seats as a number grid. Keyboard:
+// arrows move, Enter picks, Esc closes; typing filters the sectors or jumps to a number.
+const NATIVE_VALUE = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+const NATIVE_DISABLED = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'disabled');
+let openPicker = null;
+function picker(selEl, { title, search = false, numeric = false } = {}) {
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'pk-btn'; btn.id = selEl.id + 'Pk';
+  btn.setAttribute('aria-haspopup', 'listbox'); btn.setAttribute('aria-expanded', 'false');
+  btn.setAttribute('aria-label', selEl.getAttribute('aria-label') || title);
+  btn.innerHTML = '<span class="pk-val"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  selEl.after(btn); selEl.hidden = true;
+  document.querySelectorAll(`label[for="${selEl.id}"]`).forEach(l => l.htmlFor = btn.id);
+  const pop = document.createElement('div');
+  pop.className = 'pk-pop' + (numeric ? ' pk-num' : ''); pop.hidden = true;
+  pop.innerHTML = `<div class="pk-head"><span>${title}</span>${search ? '<input class="pk-find" type="text" placeholder="Szukaj, np. E21" spellcheck="false" aria-label="Szukaj sektora">' : ''}</div><div class="pk-list" role="listbox" aria-label="${title}"></div>`;
+  document.body.appendChild(pop);
+  const list = pop.querySelector('.pk-list'), find = pop.querySelector('.pk-find');
+  let chips = [], active = -1, typed = '', typedAt = 0;
+  const refresh = () => {
+    const o = selEl.selectedOptions[0];
+    btn.querySelector('.pk-val').textContent = o ? o.textContent : '';
+    btn.classList.toggle('pk-empty', !selEl.value);
+    btn.disabled = NATIVE_DISABLED.get.call(selEl);
+    if (!pop.hidden) build();
+  };
+  const build = () => {
+    list.innerHTML = '';
+    const q = find ? find.value.trim().toUpperCase().replace(/\s+/g, '') : '';
+    const add = (parent, o) => {
+      if (!o.value || (q && !(o.value + o.textContent).toUpperCase().replace(/\s+/g, '').includes(q))) return;
+      const c = document.createElement('button');
+      c.type = 'button'; c.className = 'pk-chip'; c.textContent = o.textContent; c.dataset.v = o.value;
+      c.setAttribute('role', 'option'); c.setAttribute('aria-selected', o.value === selEl.value);
+      c.tabIndex = -1; parent.appendChild(c);
+    };
+    for (const node of selEl.children) {
+      if (node.tagName === 'OPTGROUP') {
+        const g = document.createElement('div'); g.className = 'pk-group';
+        g.innerHTML = `<span class="pk-glbl">${node.label}</span><div class="pk-grid"></div>`;
+        [...node.children].forEach(o => add(g.lastChild, o));
+        if (g.lastChild.children.length) list.appendChild(g);
+      } else {
+        let grid = list.lastChild;
+        if (!grid || !grid.classList.contains('pk-grid')) { grid = document.createElement('div'); grid.className = 'pk-grid'; list.appendChild(grid); }
+        add(grid, node);
+      }
+    }
+    if (!list.children.length) list.innerHTML = '<p class="pk-none">Brak wyników</p>';
+    chips = [...list.querySelectorAll('.pk-chip')];
+    focusChip(Math.max(0, chips.findIndex(c => c.dataset.v === selEl.value)), false);
+  };
+  const focusChip = (i, scroll = true) => {
+    chips.forEach(c => c.classList.remove('pk-active'));
+    active = Math.max(0, Math.min(chips.length - 1, i));
+    const c = chips[active];
+    if (c) { c.classList.add('pk-active'); c.scrollIntoView({ block: scroll ? 'nearest' : 'center' }); }
+  };
+  const place = () => {
+    const r = btn.getBoundingClientRect(), w = Math.min(innerWidth - 32, Math.max(r.width, numeric ? 260 : 340));
+    const below = innerHeight - r.bottom - 16, above = r.top - 16, up = below < 260 && above > below;
+    pop.style.width = w + 'px';
+    pop.style.left = Math.max(16, Math.min(r.left, innerWidth - 16 - w)) + 'px';
+    pop.style.maxHeight = Math.min(380, up ? above - 6 : below - 6) + 'px';
+    pop.style.top = up ? '' : r.bottom + 6 + 'px';
+    pop.style.bottom = up ? innerHeight - r.top + 6 + 'px' : '';
+  };
+  const open = () => {
+    if (openPicker && openPicker !== api) openPicker.close();
+    openPicker = api; pop.hidden = false; btn.setAttribute('aria-expanded', 'true');
+    if (find) find.value = '';
+    build(); place();
+    (find || list).focus({ preventScroll: true });
+  };
+  const close = (refocus = false) => {
+    if (pop.hidden) return;
+    pop.hidden = true; btn.setAttribute('aria-expanded', 'false');
+    if (openPicker === api) openPicker = null;
+    if (refocus) btn.focus();
+  };
+  const choose = v => {
+    if (v !== selEl.value) { NATIVE_VALUE.set.call(selEl, v); selEl.dispatchEvent(new Event('change', { bubbles: true })); }
+    refresh(); close(true);
+  };
+  const api = { close, refresh };
+  btn.addEventListener('click', () => pop.hidden ? open() : close());
+  list.tabIndex = -1;
+  list.addEventListener('click', e => { const c = e.target.closest('.pk-chip'); if (c) choose(c.dataset.v); });
+  if (find) find.addEventListener('input', build);
+  pop.addEventListener('keydown', e => {
+    const cols = Math.max(1, getComputedStyle(chips[active]?.parentNode || list).gridTemplateColumns.split(' ').length);
+    const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols }[e.key];
+    if (step && !(find && document.activeElement === find && (e.key === 'ArrowLeft' || e.key === 'ArrowRight'))) { e.preventDefault(); focusChip(active + step); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (chips[active]) choose(chips[active].dataset.v); }
+    else if (e.key === 'Escape') { e.preventDefault(); close(true); }
+    else if (e.key === 'Tab') close();
+    else if (numeric && /^\d$/.test(e.key)) {
+      // typing a number jumps to it
+      typed = (performance.now() - typedAt < 900 ? typed : '') + e.key; typedAt = performance.now();
+      const i = chips.findIndex(c => c.dataset.v === typed);
+      if (i >= 0) focusChip(i); else { const j = chips.findIndex(c => c.dataset.v.startsWith(typed)); if (j >= 0) focusChip(j); }
+    }
+    e.stopPropagation();   // (the scene's own keys stay out of it)
+  });
+  // programmatic changes to the select show on the button
+  Object.defineProperty(selEl, 'value', { get() { return NATIVE_VALUE.get.call(this); }, set(v) { NATIVE_VALUE.set.call(this, v); refresh(); } });
+  Object.defineProperty(selEl, 'disabled', { get() { return NATIVE_DISABLED.get.call(this); }, set(v) { NATIVE_DISABLED.set.call(this, v); refresh(); } });
+  new MutationObserver(refresh).observe(selEl, { childList: true, subtree: true });
+  refresh();
+  return api;
+}
+picker(sel, { title: 'Przejdź do sektora', search: true });
+picker(fSector, { title: 'Sektor', search: true });
+picker(fRow, { title: 'Rząd', numeric: true });
+picker(fSeat, { title: 'Miejsce', numeric: true });
+addEventListener('pointerdown', e => { if (openPicker && !e.target.closest('.pk-pop, .pk-btn')) openPicker.close(); }, true);
+addEventListener('resize', () => openPicker && openPicker.close());
 $('btnRandom').onclick = () => {
   let k = Math.floor(Math.random() * totalSeats);
   for (const sec of sectors) { if (k < sec.seats.length) return selectSeat(sec, k); k -= sec.seats.length; }
