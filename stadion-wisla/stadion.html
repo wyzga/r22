@@ -3275,12 +3275,21 @@ const setNight = (() => {
   }, false);
   const lights = new THREE.Group();
   lights.visible = false; scene.add(lights);
-  for (const { pos, target } of floodHeads) {
-    const sp = new THREE.SpotLight(0xfffaf0, 2.6, 0, 0.62, 0.75, 0);
-    sp.position.copy(pos); sp.target.position.copy(target);
+  for (const { pos } of floodHeads) {
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
     glow.position.copy(pos); glow.scale.set(10, 10, 1);
-    lights.add(sp, sp.target, glow);
+    lights.add(glow);
+  }
+  // the beams: every light is worked out for every pixel on screen, so each side's five masts throw four beams
+  // between them, evenly from end to end and as bright in all (the wide cones overlap, so the pitch looks the same)
+  for (const side of [-1, 1]) {
+    const heads = floodHeads.filter(h => Math.sign(h.pos.z) === side).sort((a, b) => a.pos.x - b.pos.x);
+    const a = heads[0], b = heads[heads.length - 1], n = 4;
+    for (let j = 0; j < n; j++) {
+      const sp = new THREE.SpotLight(0xfffaf0, 2.6 * heads.length / n * 1.05, 0, 0.62, 0.75, 0);
+      sp.position.lerpVectors(a.pos, b.pos, j / (n - 1)); sp.target.position.lerpVectors(a.target, b.target, j / (n - 1));
+      lights.add(sp, sp.target);
+    }
   }
   // the lamps over the top rows light the stands from above the pitch, square onto each (no shadows, so the roofs
   // do not leave the upper rows dark)
@@ -3291,7 +3300,7 @@ const setNight = (() => {
   }
   const day = { top: skyMat.uniforms.top.value.clone(), bottom: skyMat.uniforms.bottom.value.clone(), fog: scene.fog.color.clone(),
     hemi: [hemi.color.clone(), hemi.groundColor.clone(), hemi.intensity], sun: [sun.color.clone(), sun.intensity, sun.position.clone()] };
-  return on => {
+  const set = on => {
     lights.visible = on;
     skyMat.uniforms.top.value.set(on ? 0x02050d : day.top); skyMat.uniforms.bottom.value.set(on ? 0x1b2236 : day.bottom);
     skyMat.uniforms.cloud.value.set(on ? 0x262c3b : 0xffffff); skyMat.uniforms.cover.value = on ? 0.5 : 0.85; skyMat.uniforms.night.value = on ? 1 : 0;
@@ -3303,6 +3312,14 @@ const setNight = (() => {
     standLampMat.emissiveIntensity = on ? 3 : 0;
     if (lampMat) { lampMat.emissive.set(on ? 0xffffff : 0x000000); lampMat.emissiveMap = lampMat.map; lampMat.emissiveIntensity = 2.2; lampMat.needsUpdate = true; }
   };
+  // the extra lights change every shader: build the night ones while the page loads, not on the first switch
+  set.warm = () => {
+    if (lights.visible) return;
+    lights.visible = true;
+    renderer.compileAsync(scene, camera).catch(() => {});   // the lights are taken in at the call; it only waits after
+    lights.visible = false;
+  };
+  return set;
 })();
 toggle('tNight', setNight);
 
@@ -3812,6 +3829,7 @@ toggle('btnMatch', on => { $('btnMatch').textContent = on ? 'Wyłącz mecz' : 'W
     for (const o of list) { scene.remove(o); if (!pickOnly.has(o)) o.geometry.dispose(); }
   }
 })();
+setNight.warm();
 
 // ---------------------------------------------------------------------------
 // Loop
