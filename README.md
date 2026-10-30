@@ -28,7 +28,7 @@ Otwórz `stadion-wisla/index.html` w przeglądarce. To samodzielna kopia z wbudo
 ## Model
 
 - Trybuny A (z H), C, E, G i narożniki B, D, F; pawilon medialny w narożniku H.
-- Każde krzesełko trybun pochodzi z planu miejsc klubu: 32 320 miejsc w 51 sektorach, z prawdziwymi rzędami i numerami. Razem ze skyboxami, balkonami, lożą prezydencką i miejscami dla mediów plan ma 33 499 miejsc; te 1 179 model pokazuje bez numerów, a trybuna prasowa ma 241 stanowisk.
+- Każde krzesełko pochodzi z planu miejsc klubu, z prawdziwym sektorem, rzędem i numerem: 32 320 na trybunach i 938 na balkonie przed skyboxami między poziomami (skyboxy SK01–SK34 po 4 rzędy, loża prezydencka, balkony na E), razem 33 258. Z 241 stanowiskami trybuny prasowej to 33 499, tyle co w planie.
 - Liczby rzędów jak w planie: G 32, C 33, poziomy dolne 18 (narożniki D i F 22), górne: A/H 21, E 25, narożniki B/D/F 25.
 - Schody, wyjścia, tunel dla piłkarzy i trybuna prasowa są tam, gdzie plan zostawia przerwy w rzędach: 2–5 brakujących miejsc to schody, większa przerwa przez co najmniej trzy rzędy to wyjście.
 - Plan jest schematyczny. Na prostych trybunach siatka miejsc jest rozciągnięta na długość trybuny, więc na G i C (67 m) krzesełka są węższe. W narożnikach każde miejsce zachowuje swoje położenie w szerokości wachlarza.
