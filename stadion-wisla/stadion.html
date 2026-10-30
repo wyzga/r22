@@ -2032,8 +2032,10 @@ function exitGateSign(name) {
         }
       }
     }
-    // railings between a corner's open steps and its seats: glass in teal frames, stepping with the rows
+    // railings between a corner's open steps and its seats: glass in teal frames, stepping with the rows (on the
+    // lower tiers only: the upper tiers' open steps are left without, as photographed)
     for (const [key, edges] of Object.entries(st.stepRails)) {
+      if (key === 'upper') continue;
       const t = st.tiers[key], rails = [];
       for (const edge of edges) for (let i = 0; i + 1 < edge.length; i++) {
         const [r, sa] = edge[i], [r1, sb] = edge[i + 1];
