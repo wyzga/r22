@@ -53,6 +53,26 @@
   .src { grid-column: 1 / -1; margin: 0 16px; font-size: 12px; color: var(--muted); line-height: 1.4; }
   .src a { color: var(--red); }
 
+  /* seat finder: type "E21 5 12" or pick sector, row and seat, then sit there */
+  .finder { grid-column: 1 / -1; margin: 10px 16px 0; padding-top: 12px; border-top: 1px solid var(--line); display: grid; gap: 7px; }
+  .f-lbl { font: 600 11px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .f-quick { display: grid; grid-template-columns: 1fr auto; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .f-quick:focus-within { border-color: var(--ink); }
+  .f-quick input { border: 0; outline: 0; min-width: 0; padding: 10px 12px; font: 500 15px var(--sans); color: var(--ink); background: var(--paper); }
+  .f-go { width: 44px; border: 0; background: var(--ink); color: #fff; cursor: pointer; display: grid; place-items: center; }
+  .f-go:hover { background: var(--navy); }
+  .finder svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .f-or { display: flex; align-items: center; gap: 10px; margin: 4px 0 1px; font: 600 10.5px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .f-or::before, .f-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .finder select { max-width: none; width: 100%; border-radius: 8px; }
+  .finder select:disabled { background: var(--paper-muted); cursor: default; }
+  .f-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .f-two > div { display: grid; gap: 7px; }
+  .finder .f-see { margin-top: 5px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border-radius: 8px; background: var(--red); border-color: var(--red); color: #fff; }
+  .finder .f-see:not(:disabled):hover { background: var(--red-deep); border-color: var(--red-deep); }
+  .f-msg { margin: 0; min-height: 0; font-size: 12.5px; color: var(--red); }
+  .f-msg:empty { display: none; }
+
   /* ticket card */
   .ticket { grid-column: 2; grid-row: 1 / span 2; align-self: start; width: 340px; max-height: 100%; overflow: auto; box-sizing: border-box; padding: 0; scrollbar-width: thin; }
   .t-top { padding: 14px 16px 12px; display: grid; gap: 12px; }
@@ -117,7 +137,9 @@
     .brand { max-width: none; padding-bottom: 10px; }
     .crest, .crest svg { width: 38px; height: 52px; }
     .brand h1 { font-size: 20px; }
-    body.seated .brand .hint, body.seated .brand .src, body.seated .brand .kicker { display: none; }
+    body.seated .brand .hint, body.seated .brand .src, body.seated .brand .kicker, body.seated .finder { display: none; }
+    .finder { margin-top: 6px; padding-top: 8px; gap: 5px; }
+    .f-or, .finder > .f-lbl[for="fSector"], #fSector, .f-two, .finder .f-see { display: none; }
     .ticket { grid-column: 1; grid-row: 2; align-self: end; width: 100%; max-height: 58vh; }
     .ticket:not(.open) .perf, .ticket:not(.open) .t-body { display: none; }
     .t-more { display: inline-block !important; }
@@ -149,6 +171,22 @@
     <h1>Synerise Arena Kraków</h1>
     <p class="hint" id="hint">Kliknij dowolne krzesełko, aby na nim usiąść i zobaczyć murawę z tej perspektywy. Przeciągnij, aby obracać; kółko przybliża.</p>
     <p class="src" id="srcNote">Projekt nieoficjalny.</p>
+    <form class="finder" id="finder" autocomplete="off">
+      <label class="f-lbl" for="fQuick">Szybko: sektor, rząd, miejsce</label>
+      <div class="f-quick">
+        <input id="fQuick" type="text" placeholder="np. E21 5 12" spellcheck="false" aria-describedby="fMsg">
+        <button type="submit" class="f-go" aria-label="Szukaj miejsca"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
+      </div>
+      <div class="f-or"><span>lub wybierz krok po kroku</span></div>
+      <label class="f-lbl" for="fSector">Sektor</label>
+      <select id="fSector"></select>
+      <div class="f-two">
+        <div><label class="f-lbl" for="fRow">Rząd</label><select id="fRow" disabled><option value="">—</option></select></div>
+        <div><label class="f-lbl" for="fSeat">Miejsce</label><select id="fSeat" disabled><option value="">—</option></select></div>
+      </div>
+      <button type="button" class="btn f-see" id="fSee" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>Zobacz</button>
+      <p class="f-msg" id="fMsg" role="status"></p>
+    </form>
   </header>
 
   <aside class="ticket panel" id="ticket" hidden aria-live="polite">
@@ -479,15 +517,60 @@ function fitRow(ps, a, b, m) {
       if (!rows.has(p.r)) rows.set(p.r, []);
       rows.get(p.r).push(p);
     }
+    // the corners' lower tiers: an exit opens as on the side stand's lower tier, at the same height (the rows of the
+    // side stand's exits, by height) and with a stair from it straight down to the pitch through the front rows. It is
+    // in the run along the side stand, square to the rows like the side stand's own exits, in the middle of the open
+    // steps the plan leaves in the rows below it (failing that, just short of the bend); the seats of its rows keep
+    // clear of it. u: the place along the side stand (s at depth o is u - 2·TAU·o on that run)
+    let cx = null, cxSpec = null;
+    if (st.fan && key === 'lower') {
+      const sl = byId[st.id === 'B' ? 'A' : 'E'].tiers.lower, sx = byId[st.id === 'B' ? 'A' : 'E'].exits.lower;
+      const med = a => a.sort((x, y) => x - y)[a.length >> 1], at = v => Math.round((sl.y0 + v * sl.r - t.y0) / t.r);
+      const v0 = at(med(sx.map(e => e.rows[0]))), v1 = Math.min(t.rows - 2, at(med(sx.map(e => e.rows[1]))));
+      const k = st.endS0 ? -1 : 1, toU = (s, o) => s + k * 2 * TAU * o, toS = (u, o) => u - k * 2 * TAU * o;
+      cxSpec = { v0, v1, h: 0.9, k, toU, toS, band: null };
+    }
+    const makeCx = () => {
+      const { v0, v1, h, toS, band } = cxSpec;
+      let u;
+      if (band && band[1] - band[0] >= 2 * h + 0.4) u = (band[0] + band[1]) / 2;
+      else { const side = st.endS0 ? st.a1 : st.a0, w = side + TAU * (t.o0 + v0 * t.d) - h - 0.3; u = st.endS0 ? st.len + st.a1 - w : -st.a0 + w; }
+      return { c: o => toS(u, o), h, rows: [v0, v1], down: true };
+    };
+    // (the open stretch of row r in the run along the side stand, narrowing the band the stair must fit in)
+    const cxOpen = (r, ps) => {
+      const o = rowDepth(t, r), { toU, k } = cxSpec, lim = k > 0 ? -TAU * o : st.len + TAU * o;
+      const ss = ps.map(p => p.s).sort((a, b) => a - b), pts = [tierS0(st, key, o), ...ss.flatMap(v => [v - 0.25, v + 0.25]), tierS1(st, key, o)];
+      const gaps = [];
+      for (let i = 0; i < pts.length; i += 2) {
+        let [a, b] = [pts[i], pts[i + 1]];
+        if (k > 0) b = Math.min(b, lim); else a = Math.max(a, lim);
+        if (b - a > 0.6) gaps.push([toU(a, o), toU(b, o)]);
+      }
+      const ov = g => cxSpec.band ? Math.min(g[1], cxSpec.band[1]) - Math.max(g[0], cxSpec.band[0]) : g[1] - g[0];
+      const g = gaps.sort((p, q) => ov(q) - ov(p))[0];
+      cxSpec.band = !g ? cxSpec.band : cxSpec.band ? [Math.max(g[0], cxSpec.band[0]), Math.min(g[1], cxSpec.band[1])] : g;
+    };
+    const inCx = (r, a, b) => cx && r >= cx.rows[0] && r <= cx.rows[1] && b > cx.c(rowDepth(t, r)) - cx.h - 0.5 && a < cx.c(rowDepth(t, r)) + cx.h + 0.5;
     const cand = [], wide = [], ws = [];
     for (const [r, ps] of [...rows].sort((p, q) => p[0] - q[0])) {
       // (on the corners in number order, so neighbouring sectors never interleave)
       ps.sort(st.fan ? (a, b) => numDir * (a.num - b.num) : (a, b) => a.s - b.s);
-      if (st.fan) { const [a, b] = fanRow(st, t, r, key); fitRow(ps, a, b, 0.42); }
+      if (cxSpec && !cx && r >= cxSpec.v0) cx = makeCx();
+      if (st.fan) {
+        const [a, b] = fanRow(st, t, r, key);
+        if (inCx(r, -Infinity, Infinity)) {
+          const m = cx.c(rowDepth(t, r));
+          fitRow(ps.filter(p => p.s < m), a, m - cx.h - 0.45, 0.42);
+          fitRow(ps.filter(p => p.s >= m), m + cx.h + 0.45, b, 0.42);
+        } else fitRow(ps, a, b, 0.42);
+        if (cxSpec && r < cxSpec.v0) cxOpen(r, ps);
+      }
       const ds = ps.slice(1).map((p, i) => p.s - ps[i].s).sort((a, b) => a - b), w = pitch || ds[ds.length >> 1] || 0.45;
       ws.push(w);
       for (let i = 1; i < ps.length; i++) {
         const g = (ps[i].s - ps[i - 1].s) / w - 1, span = [r, ps[i - 1].s + w / 2, ps[i].s - w / 2];
+        if (inCx(...span)) continue;
         if (g >= 1.5 && g < 5.5) st.stairs[key].push(span);
         else if (g >= 5.5 && g <= 26) cand.push(span);
         else if (g > 26) wide.push(span);
@@ -519,17 +602,11 @@ function fitRow(ps, a, b, m) {
       }
       return { c, h, rows: [g.r0, g.r1] };
     }).sort((p, q) => p.c(tierMid) - q.c(tierMid));   // (in order at mid-depth: on a corner they drift apart with depth)
-    // the corners' lower tiers: the plan leaves their front rows nearly empty, and an exit opens there as on the other
-    // lower tiers (rows from the first without seats to the last with at most four). It is in the run along the side
-    // stand, just short of the bend, square to the rows like the side stand's own exits: at a fixed distance w from
-    // the side stand's end, whatever the depth
-    if (st.fan && key === 'lower') {
-      const cnt = r => (rows.get(r) || []).length;
-      let v0 = 0; while (v0 < t.rows && cnt(v0)) v0++;
-      let v1 = v0; while (v1 + 1 < t.rows && cnt(v1 + 1) <= 4) v1++;
-      const h = 0.9, side = st.endS0 ? st.a1 : st.a0, w = side + TAU * (t.o0 + v0 * t.d) - h - 0.3;
-      const c = st.endS0 ? o => rowS1(st, o) - w : o => rowS0(st, o) + w;
-      if (v1 > v0 && v1 + 1 < t.rows) st.exits.lower.push({ c, h, rows: [v0, v1] });
+    // (the corner's exit, and its stair down to the pitch)
+    if (cxSpec && !cx) cx = makeCx();
+    if (cx) {
+      st.exits.lower.push(cx);
+      for (let r = 0; r < cx.rows[0]; r++) { const m = cx.c(rowDepth(t, r)); st.stairs.lower.push([r, m - cx.h, m + cx.h]); }
     }
     // the players' tunnel: the gap under the front rows of the main stand
     if (st.kind === 'main' && key === 'lower') {
@@ -551,7 +628,7 @@ function fitRow(ps, a, b, m) {
       const edges = [[], []];
       const step = (r, a, b) => {   // (cut round the recess of an exit in that row)
         let spans = [[a, b]];
-        for (const e of st.exits[key]) if (r >= e.rows[0] && r <= e.rows[1]) {
+        for (const e of st.exits[key]) if (r >= (e.down ? 0 : e.rows[0]) && r <= e.rows[1]) {
           const o = rowDepth(t, r), c0 = e.c(o) - e.h, c1 = e.c(o) + e.h;
           spans = spans.flatMap(([x, y]) => [[x, Math.min(y, c0)], [Math.max(x, c1), y]]).filter(([x, y]) => y - x > 0.2);
         }
@@ -688,9 +765,20 @@ const loadTex = (url, mirror) => new Promise(res => texLoader.load(ASSET(url), t
   res(t);
 }, undefined, () => res(null)));
 // herb.svg (the club crest) is optional: present only in the local copy next to index.html
-const [TX_GRASS, TX_CONCRETE, TX_FACADE, TX_ROOF, TX_PARK, TX_CREST, TX_SEAT] = await Promise.all([
-  loadTex('tex/grass.jpg', true), loadTex('tex/concrete.jpg'), loadTex('tex/facade.jpg'), loadTex('tex/roof.jpg'), loadTex('tex/park.jpg', true), loadTex('herb.svg'), loadTex('tex/seat.jpg'),
+const [TX_GRASS, TX_CONCRETE, TX_FACADE, TX_ROOF, TX_PARK, TX_CREST] = await Promise.all([
+  loadTex('tex/grass.jpg', true), loadTex('tex/concrete.jpg'), loadTex('tex/facade.jpg'), loadTex('tex/roof.jpg'), loadTex('tex/park.jpg', true), loadTex('herb.svg'),
 ]);
+// the seat's moulded plastic: white (tinted per seat), a square darker rim and two pressed ridges across
+const TX_SEAT = canvasTex(256, 256, (g, w, h) => {
+  const bg = g.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#ffffff'); bg.addColorStop(1, '#e9ebee');
+  g.fillStyle = bg; g.fillRect(0, 0, w, h);
+  g.strokeStyle = '#5d6a78'; g.lineWidth = 10; g.strokeRect(5, 5, w - 10, h - 10);
+  g.strokeStyle = 'rgba(93,106,120,.35)'; g.lineWidth = 4; g.strokeRect(12, 12, w - 24, h - 24);
+  for (const y of [104, 144]) {
+    g.fillStyle = 'rgba(70,80,92,.38)'; g.fillRect(30, y, w - 60, 3);
+    g.fillStyle = 'rgba(255,255,255,.9)'; g.fillRect(30, y + 3, w - 60, 2);
+  }
+}, false);
 // textured material whose UVs are laid out in metres (tile = metres per repeat of the image)
 const texMat = (tex, tile, params) => { const m = new THREE.MeshStandardMaterial({ ...params, map: tex || null }); if (tex) m.userData.tile = tile; return m; };
 // planar UVs in world metres, projected per face along its dominant normal axis
@@ -1665,9 +1753,11 @@ instancedMembers(members.cable, cableMat, false);
 // ---------------------------------------------------------------------------
 // Seats (one InstancedMesh per sector), coloured like the real stands
 // ---------------------------------------------------------------------------
+// (a box's thin faces take a plain patch of the texture, so its rim never shows on the sides)
 function chairGeometry(w) {
-  const pan = new THREE.BoxGeometry(w, 0.07, 0.40); pan.translate(0, PAN_Y, 0.04);
-  const back = new THREE.BoxGeometry(w, 0.42, 0.05); back.rotateX(-0.12); back.translate(0, PAN_Y + 0.23, -0.17);
+  const plain = (g, faces) => { const uv = g.attributes.uv; for (const f of faces) for (let i = 4 * f; i < 4 * f + 4; i++) uv.setXY(i, 0.5, 0.25); };
+  const pan = new THREE.BoxGeometry(w, 0.07, 0.40); plain(pan, [0, 1, 4, 5]); pan.translate(0, PAN_Y, 0.04);
+  const back = new THREE.BoxGeometry(w, 0.42, 0.05); plain(back, [0, 1, 2, 3]); back.rotateX(-0.12); back.translate(0, PAN_Y + 0.23, -0.17);
   return mergeGeometries([pan, back]);
 }
 // Seat numbers: a 10 × 5 cm plate on the front of each backrest, near its top (facing the pitch).
@@ -1859,7 +1949,9 @@ function seatColor(st, key, name, s, r) {
       const t = st.tiers[key], rails = [];
       for (const edge of edges) for (let i = 0; i + 1 < edge.length; i++) {
         const [r, sa] = edge[i], [r1, sb] = edge[i + 1];
-        if (r1 !== r + 1) continue;
+        // (only between neighbouring rows whose seats end close together: where the edge jumps, as across an exit,
+        // the railing would cut through the steps and other railings)
+        if (r1 !== r + 1 || Math.abs(sb - sa) > 1.2) continue;
         const p = W(st, sa, rowDepth(t, r), tierY(st, t, r, sa, rowDepth(t, r))), q = W(st, sb, rowDepth(t, r1), tierY(st, t, r1, sb, rowDepth(t, r1)));
         glassPanel(p, q, 0.8);
         rails.push([p.clone().setY(p.y + 0.9), q.clone().setY(q.y + 0.9)], [p, p.clone().setY(p.y + 0.9)]);
@@ -1870,8 +1962,13 @@ function seatColor(st, key, name, s, r) {
     if (treads.length) add(new THREE.Mesh(mergeGeometries(treads), st.id === 'G' ? yellow : stairMat));
     for (const [key, list] of Object.entries(st.exits)) {
       const t = st.tiers[key], rails = [];
-      for (const { c, h, rows: [v0, v1] } of list) {
+      for (const { c, h, rows: [v0, v1], down } of list) {
         const oB = t.o0 + (v1 + 1) * t.d, yA = t.y0 + v0 * t.r, yT = t.y0 + Math.min(v1 + 1, t.rows - 1) * t.r;
+        // (a corner's exit: its stair goes on down through the front rows, then by steps in front of them to the pitch)
+        if (down) {
+          const n = 3, sd = 0.32, m = c(t.o0);
+          for (let k = 0; k < n; k++) boxL(st, m - h, m + h, t.o0 - (k + 1) * sd, t.o0 - k * sd, 0, t.y0 * (n - k) / (n + 1), stairMat);
+        }
         const dH = Math.max(1.6, Math.min(2.2, yT - yA - 0.35)), dW = Math.min(2.0, 2 * h - 0.4), sb = c(oB);
         // doors: dark glass in a light frame, split in two leaves
         plane(st, sb, dW, oB - 0.02, yA + dH / 2, dH, doorGlassMat);
@@ -1881,7 +1978,7 @@ function seatColor(st, key, name, s, r) {
         // railings along both sides, following the rows, and across the top over the doors
         for (const dir of [-1, 1]) {
           const edge = [];
-          for (let r = v0; r <= v1 + 1; r++) { const o = t.o0 + r * t.d; edge.push(W(st, c(o) + dir * h, o, t.y0 + Math.min(r, t.rows - 1) * t.r)); }
+          for (let r = down ? 0 : v0; r <= v1 + 1; r++) { const o = t.o0 + r * t.d; edge.push(W(st, c(o) + dir * h, o, t.y0 + Math.min(r, t.rows - 1) * t.r)); }
           for (let i = 0; i + 1 < edge.length; i++) {
             glassPanel(edge[i], edge[i + 1], 0.8);
             rails.push([edge[i].clone().setY(edge[i].y + 0.9), edge[i + 1].clone().setY(edge[i + 1].y + 0.9)]);
@@ -2136,6 +2233,7 @@ function selectSeat(sec, idx, { from = 'click' } = {}) {
   const bump = prev && from !== 'nav' ? 4 : 0;
   startTween(eye, quatFromLook(tgt.yaw, tgt.pitch), fov, prev ? 900 : 1500, bump, () => { look = { ...tgt, fov }; });
   updateTicket();
+  syncFinder(selected);
 }
 
 // back to the whole stadium: the camera stands over the centre spot, turning in place to look round the stands
@@ -2388,6 +2486,41 @@ sel.addEventListener('change', () => {
   const keys = [...sec.rows.keys()], list = sec.rows.get(keys[Math.floor(keys.length / 2)]);
   selectSeat(sec, list[Math.floor(list.length / 2)]);
 });
+
+// seat finder: quick "E21 5 12" or sector → row → seat, then "Zobacz" sits the camera there
+const fSector = $('fSector'), fRow = $('fRow'), fSeat = $('fSeat'), fMsg = $('fMsg');
+const fKey = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/gi, 'l').replace(/\s+/g, '').toUpperCase();
+const fByKey = new Map(sectors.map(s => [fKey(s.name), s]));
+fSector.innerHTML = '<option value="">Wybierz sektor</option>' + sel.innerHTML.replace(/<option value="">[^<]*<\/option>/, '');
+const fOpts = (el, vals) => { el.innerHTML = '<option value="">—</option>' + vals.map(v => `<option value="${v}">${v}</option>`).join(''); el.disabled = !vals.length; };
+const fFillRows = sec => { fOpts(fRow, sec ? [...sec.rows.keys()].sort((a, b) => a - b) : []); fOpts(fSeat, []); };
+const fFillSeats = (sec, row) => { fOpts(fSeat, sec && row ? sec.rows.get(row).map(i => sec.seats[i].num).sort((a, b) => a - b) : []); };
+const fFind = (sec, row, num) => (sec?.rows.get(row) || []).find(i => sec.seats[i].num === num);
+const fUpdate = () => { fSee.disabled = !fSeat.value; fMsg.textContent = ''; };
+const fSee = $('fSee');
+fSector.addEventListener('change', () => { fFillRows(sectorByName.get(fSector.value)); fUpdate(); });
+fRow.addEventListener('change', () => { fFillSeats(sectorByName.get(fSector.value), +fRow.value); fUpdate(); });
+fSeat.addEventListener('change', fUpdate);
+fSee.onclick = () => {
+  const sec = sectorByName.get(fSector.value), k = fFind(sec, +fRow.value, +fSeat.value);
+  if (k != null) selectSeat(sec, k);
+};
+$('finder').addEventListener('submit', e => {
+  e.preventDefault();
+  const m = $('fQuick').value.trim().match(/^(.*?)[\s,.;:/-]*(\d+)[\s,.;:/-]+(\d+)$/);
+  const sec = m && fByKey.get(fKey(m[1]));
+  if (!m || !sec) { fMsg.textContent = m ? `Nie ma sektora „${m[1].trim()}”.` : 'Wpisz sektor, rząd i miejsce, np. E21 5 12.'; return; }
+  const row = +m[2], num = +m[3];
+  if (!sec.rows.has(row)) { fMsg.textContent = `Sektor ${sec.name} nie ma rzędu ${row}.`; return; }
+  const k = fFind(sec, row, num);
+  if (k == null) { fMsg.textContent = `W sektorze ${sec.name}, rząd ${row}, nie ma miejsca ${num}.`; return; }
+  selectSeat(sec, k);
+});
+// keep the step-by-step pickers on the seat the camera sits in
+const syncFinder = ({ sec, idx }) => {
+  const s = sec.seats[idx];
+  fSector.value = sec.name; fFillRows(sec); fRow.value = s.row; fFillSeats(sec, s.row); fSeat.value = s.num; fUpdate();
+};
 $('btnRandom').onclick = () => {
   let k = Math.floor(Math.random() * totalSeats);
   for (const sec of sectors) { if (k < sec.seats.length) return selectSeat(sec, k); k -= sec.seats.length; }
@@ -2660,5 +2793,5 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 $('loading').remove();
-window.__stadium = { PITS, scene, match, sectors, totalSeats, capacity, selectSeat, sectorByName, camera, controls, render: () => renderer.render(scene, camera) };
+window.__stadium = { STANDS, PITS, scene, match, sectors, totalSeats, capacity, selectSeat, sectorByName, camera, controls, render: () => renderer.render(scene, camera) };
 </script>
