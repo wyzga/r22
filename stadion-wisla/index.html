@@ -1267,7 +1267,7 @@ function arenaLogo(g, w, h, ink = '#ffffff') {
 // 4:3 video screens under the roofs of the side stands, centred on the stand
 function videoScreen(st, up, R) {
   // hung from the front of the roof, just behind its edge, on rods from the roof girders (as photographed)
-  const L = st.len, top = R - 1.7, sh = 4.8, sw = sh * 4 / 3, o = 1.0;
+  const L = st.len, top = R - 1.7, sh = 6.0, sw = sh * 4 / 3, o = 1.0;
   // side panels with the club crest flank the screen, as on the real boards
   const pw = sh * 0.55, half = sw / 2 + pw + 0.2;
   boxL(st, L / 2 - half - 0.2, L / 2 + half + 0.2, o, o + 0.6, top - sh - 0.3, top, darkBack, { cast: true });
@@ -1327,7 +1327,8 @@ function ledCanvas(texts, colors) {
   };
 }
 const boardTex = canvasTex(2048, 80, ledCanvas([SPONSOR, 'WISŁA KRAKÓW', SPONSOR, 'TS WISŁA · OD 1906'], [null, ['#c8172e', '#fff'], null, ['#0f1d3d', '#fff']]));
-const fasciaTex = canvasTex(2048, 96, ledCanvas(['WISŁA KRAKÓW', SPONSOR, 'TS WISŁA · 1906', SPONSOR], [['#b5122a', '#fff'], null, ['#b5122a', '#fff'], null]));
+// the front of the upper tiers all round (side stands and corners): bare concrete, no advertising
+const fasciaMat = new THREE.MeshStandardMaterial({ color: 0xa9adb3, roughness: 0.9 });
 const ledMats = [];
 function ledMat(tex, w, tileLen) {
   const map = tex.clone(); map.repeat.set(w / tileLen, 1); map.needsUpdate = true;
@@ -1423,10 +1424,8 @@ for (const st of STANDS) {
     cornerPiece([[upEnd, 0], [upEnd, fTop], [st.back, fTop], [st.back, 0]], blackGlass, { cast: true });
     cornerPiece([[st.back, 7.2], [st.back + 0.35, 7.2], [st.back + 0.35, 8.4], [st.back, 8.4]], whiteBand);
     cornerPiece([[st.back, 15.5], [st.back + 0.35, 15.5], [st.back + 0.35, 16.1], [st.back, 16.1]], whiteBand);
-    // band on the front of the upper tier, continuing the side stand's: red like stand E's LED fascia, grey
-    // bare concrete next to the main stand
-    cornerPiece([[up.o0 - 0.06, up.y0 - 1.4], [up.o0, up.y0 - 1.4], [up.o0, up.y0], [up.o0 - 0.06, up.y0]],
-      st.id === 'B' ? new THREE.MeshStandardMaterial({ color: 0xa9adb3, roughness: 0.9 }) : new THREE.MeshStandardMaterial({ color: 0xa83c4c, emissive: 0x2a0c12, roughness: 0.6 }));
+    // band on the front of the upper tier, continuing the side stand's: bare concrete
+    cornerPiece([[up.o0 - 0.06, up.y0 - 1.4], [up.o0, up.y0 - 1.4], [up.o0, up.y0], [up.o0 - 0.06, up.y0]], fasciaMat);
     cornerPiece([[st.back, fTop - 1.4], [st.back + 0.35, fTop - 1.4], [st.back + 0.35, fTop], [st.back, fTop]], whiteBand);
     // building filling the corner out to the rectangle formed by the back lines of the neighbouring stands
     // (the corner's back runs along the side stand's back line, diagonally, then 3 m short of the goal-end stand's)
@@ -1545,9 +1544,9 @@ for (const st of STANDS) {
     }
     // door frames every few panels and the box partitions
     for (let s = 3; s < L - 1; s += 6) boxL(st, s - 0.06, s + 0.06, gO - 0.04, gO + 0.02, yF, yUnder(gO), coreMat);
-    // front of the upper tier: LED band on stand E; bare concrete with the club emblem in the middle on the main stand
+    // front of the upper tier: bare concrete, with the club emblem in the middle on the main stand
+    plane(st, L / 2, L, up.o0 - 0.04, up.y0 - 0.7, 1.4, fasciaMat);
     if (st.kind === 'main') {
-      plane(st, L / 2, L, up.o0 - 0.04, up.y0 - 0.7, 1.4, new THREE.MeshStandardMaterial({ color: 0xa9adb3, roughness: 0.9 }));
       const crest = canvasTex(256, 300, (g, w, h) => {
         g.clearRect(0, 0, w, h);
         g.fillStyle = '#c39a52';
@@ -1562,8 +1561,6 @@ for (const st of STANDS) {
       }, false);
       const crestMap = TX_CREST || crest, crestW = TX_CREST ? 1.32 * TX_CREST.image.width / TX_CREST.image.height : 1.15;
       plane(st, L / 2, crestW, up.o0 - 0.08, up.y0 - 0.66, 1.32, new THREE.MeshStandardMaterial({ map: crestMap, transparent: true, roughness: 0.5 }));
-    } else {
-      plane(st, L / 2, L, up.o0 - 0.04, up.y0 - 0.7, 1.4, ledMat(fasciaTex, L, 34));
     }
     // glazed commentary booths over the last rows at both ends of the main stand's upper tier (A and H):
     // a concrete floor slab on the top row's parapet, a long glass front, and a projecting concrete eave
@@ -1582,7 +1579,19 @@ for (const st of STANDS) {
     // building behind: black glass outside with white bands; its face towards the pitch above the top row and
     // its ends are glazed in light reflective glass, as photographed
     const glazed = texMat(TX_FACADE, 6, { color: TX_FACADE ? 0xb4c3d3 : 0x6b7f96, roughness: 0.08, metalness: 0.6, emissive: 0x0d1624 });
-    boxL(st, 0, L, upEnd, B, 0, R - 2.2, [blackGlass, blackGlass, blackGlass, blackGlass, blackGlass, glazed].map((m, i) => i < 2 && st.kind === 'main' ? glazed : m), { cast: true });
+    // (on E there is no glass above the top row: as photographed, the roof sits on a deep concrete beam carried by
+    // a row of concrete columns, the space between them dark; beam and columns run on over the corners, under the
+    // roof, standing on the corner buildings, with a dark wall behind them)
+    const recess = new THREE.MeshStandardMaterial({ color: 0x15181d, roughness: 1 });
+    const faces = m => [blackGlass, blackGlass, blackGlass, blackGlass, blackGlass, m].map((m, i) => i < 2 && st.kind === 'main' ? glazed : m);
+    boxL(st, 0, L, upEnd, B, 0, R - 2.2, faces(st.kind === 'masts' ? recess : glazed), { cast: true });
+    if (st.kind === 'masts') {
+      const [w0, w1] = st.wings;
+      for (const [a, b] of [[-w0, 0], [L, L + w1]]) boxL(st, a, b, B - 0.4, B, tierTop(up), R - 2.2, faces(recess), { cast: true });
+      boxL(st, -w0, L + w1, upEnd - 0.5, B, R - 3.4, R - 1.5, coreMat, { cast: true });
+      const n = Math.round((L + w0 + w1) / 4.4);
+      for (let i = 0; i <= n; i++) { const s = -w0 + 0.4 + (L + w0 + w1 - 0.8) * i / n; boxL(st, s - 0.3, s + 0.3, upEnd - 0.5, upEnd + 0.3, tierTop(up), R - 3.4, coreMat, { cast: true }); }
+    }
     boxL(st, -0.2, L + 0.2, B, B + 0.4, 7.2, 8.4, whiteBand);
     boxL(st, -0.2, L + 0.2, B, B + 0.4, R - 3.4, R - 2.2, whiteBand);
     boxL(st, -0.2, L + 0.2, B, B + 0.4, 15.5, 16.1, whiteBand);
