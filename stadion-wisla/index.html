@@ -859,6 +859,9 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// almost everything casting a shadow stands still: the 4096² map is redrawn only when needed (see the loop)
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xd6e0ea, 300, 1500);
@@ -1161,7 +1164,7 @@ function instancedMembers(list, mat, cast) {
     o.scale.set(th, len, th); o.updateMatrix();
     m.setMatrixAt(i, o.matrix);
   });
-  m.castShadow = cast; scene.add(m);
+  m.castShadow = cast; m.userData.bake = true; scene.add(m);
   return m;
 }
 
@@ -2457,10 +2460,10 @@ function buildSector(st, key, name, list) {
     plates.setMatrixAt(i, dummy.matrix); nums[i] = s.num;
   });
   plates.geometry.setAttribute('aNum', new THREE.InstancedBufferAttribute(nums, 1));
-  plates.frustumCulled = false;
-  scene.add(plates);
   mesh.receiveShadow = true;
   mesh.computeBoundingSphere();
+  plates.boundingSphere = mesh.boundingSphere.clone(); plates.boundingSphere.radius += 1;
+  scene.add(plates);
   const wingH = st.id === 'A' && name[0] === 'H' && key !== 'box';
   const tierLabel = name === 'PRASA' ? 'trybuna prasowa' : t.label + (wingH ? ' · skrzydło przy pawilonie' : '');
   const sec = { name, label: name, st, key, tier: t, stand: st.label, tierLabel, seats, rows, mesh, plates, data: DATA[name] };
@@ -2647,14 +2650,24 @@ const flags = (() => {
   const zero = new THREE.Matrix4().makeScale(0, 0, 0), base = new THREE.Matrix4(), m = new THREE.Matrix4();
   const hand = new THREE.Vector3(0.16, PAN_Y + 0.42, 0.08), q = new THREE.Quaternion(), e = new THREE.Euler(0, 0, 0, 'ZYX'), sc = new THREE.Vector3();
   const ss = THREE.MathUtils.smoothstep;
+  // the stretch of the stand their shadows can fall on (the flags' fans, plus a pole and its shadow all round)
+  const reach = new THREE.Box3();
+  for (const f of own) { fans.getMatrixAt(f.k, m); reach.expandByPoint(sc.setFromMatrixPosition(m)); }
+  const sphere = reach.getBoundingSphere(new THREE.Sphere());
+  sphere.radius += 8;
+  let wasUp = false;
   return {
+    sphere,
+    // returns whether the flags have moved (any up, or one just gone down), for the shadow map
     tick(now) {
       const t = reduceMotion ? 0 : now / 1000; uTime.value = t;
+      let anyUp = false;
       own.forEach((f, i) => {
         const cyc = (t / f.per + f.off) % 1, seen = f.k < fans.count && !(hiddenFan && hiddenFan.k === f.k);
         // up for about 40 % of its cycle: raised and lowered over a second or so
         const up = !seen ? 0 : reduceMotion ? 1 : ss(cyc, 0, 0.04) * (1 - ss(cyc, 0.38, 0.42));
         if (up < 0.01) { poles.setMatrixAt(i, zero); cloths.setMatrixAt(i, zero); return; }
+        anyUp = true;
         // the pole swings side to side across the stand; the cloth turns about the pole, trailing the swing
         const a = t * f.w + f.ph;
         fans.getMatrixAt(f.k, base);
@@ -2663,6 +2676,8 @@ const flags = (() => {
         poles.setMatrixAt(i, m); cloths.setMatrixAt(i, m);
       });
       poles.instanceMatrix.needsUpdate = cloths.instanceMatrix.needsUpdate = true;
+      const moved = anyUp || wasUp; wasUp = anyUp;
+      return moved;
     },
   };
 })();
@@ -3284,6 +3299,7 @@ const setNight = (() => {
     hemi.color.set(on ? 0x8d97a8 : day.hemi[0]); hemi.groundColor.set(on ? 0x2c4220 : day.hemi[1]); hemi.intensity = on ? 0.7 : day.hemi[2];
     sun.color.set(on ? 0xfff8ec : day.sun[0]); sun.intensity = on ? 0.35 : day.sun[1];
     if (on) sun.position.set(-15, 160, 20); else sun.position.copy(day.sun[2]);
+    renderer.shadowMap.needsUpdate = true;
     standLampMat.emissiveIntensity = on ? 3 : 0;
     if (lampMat) { lampMat.emissive.set(on ? 0xffffff : 0x000000); lampMat.emissiveMap = lampMat.map; lampMat.emissiveIntensity = 2.2; lampMat.needsUpdate = true; }
   };
@@ -3575,6 +3591,62 @@ toggle('btnMatch', on => { $('btnMatch').textContent = on ? 'Wyłącz mecz' : 'W
 
 
 // ---------------------------------------------------------------------------
+// Static merge: the bowl is built from some 1,500 separate meshes, each its own draw call (twice, with the shadow
+// pass). Once built, the ones that never change are baked in world space into one mesh per material, shadow
+// flags and 70 m square of ground, so the parts out of view are still culled. The pickable stand concrete is
+// merged too, its separate meshes kept out of the scene for the pointer's ray only. Left as they are: transparent
+// and multi-material meshes, shader materials, anything with children or never culled, and the instanced meshes
+// other than the steel members (seats, plates, fans, flags, trees).
+// ---------------------------------------------------------------------------
+(() => {
+  scene.updateMatrixWorld(true);
+  const pickOnly = new Set(standMeshes), groups = new Map(), sph = new THREE.Sphere(), CELL = 70;
+  const parts = o => {   // the mesh's triangles in world space (each instance of a baked instanced mesh)
+    const g0 = o.geometry, mats = [];
+    if (o.isInstancedMesh) for (let i = 0; i < o.count; i++) { const m = new THREE.Matrix4(); o.getMatrixAt(i, m); mats.push(m.premultiply(o.matrixWorld)); }
+    else mats.push(o.matrixWorld);
+    return mats.map(m => {
+      const g = new THREE.BufferGeometry();
+      for (const k of ['position', 'normal', 'uv']) if (g0.attributes[k]) g.setAttribute(k, g0.attributes[k].clone());
+      if (g0.index) g.setIndex(g0.index.clone());
+      g.applyMatrix4(m);
+      const n = g.toNonIndexed();
+      if (m.determinant() < 0) {   // mirrored: turn the triangles back to face outwards
+        for (const a of Object.values(n.attributes)) for (let i = 0; i < a.count; i += 3) for (let c = 0; c < a.itemSize; c++) {
+          const t = a.array[(i + 1) * a.itemSize + c]; a.array[(i + 1) * a.itemSize + c] = a.array[(i + 2) * a.itemSize + c]; a.array[(i + 2) * a.itemSize + c] = t;
+        }
+      }
+      return n;
+    });
+  };
+  for (const o of scene.children) {
+    if (!o.isMesh || !o.visible || !o.frustumCulled || o.children.length || Array.isArray(o.material)) continue;
+    if (o.isInstancedMesh ? !o.userData.bake || o.instanceColor : o.material.isShaderMaterial) continue;
+    if (o.material.transparent || o.material.vertexColors || o.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender) continue;
+    const g = o.geometry;
+    if (Object.keys(g.attributes).some(k => !['position', 'normal', 'uv'].includes(k)) || Object.keys(g.morphAttributes).length) continue;
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    sph.copy(g.boundingSphere).applyMatrix4(o.matrixWorld);
+    if (o.isInstancedMesh) { o.computeBoundingSphere(); sph.copy(o.boundingSphere).applyMatrix4(o.matrixWorld); }
+    const attrs = ['position', 'normal', 'uv'].filter(k => g.attributes[k]).join();
+    const key = [o.material.uuid, o.castShadow, o.receiveShadow, o.renderOrder, attrs, Math.floor(sph.center.x / CELL), Math.floor(sph.center.z / CELL)].join('|');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(o);
+  }
+  for (const list of groups.values()) {
+    if (list.length < 2 && !list[0].isInstancedMesh) continue;
+    const geos = list.flatMap(parts), merged = mergeGeometries(geos);
+    for (const g of geos) g.dispose();
+    if (!merged) continue;
+    const a = list[0], m = new THREE.Mesh(merged, a.material);
+    m.castShadow = a.castShadow; m.receiveShadow = a.receiveShadow; m.renderOrder = a.renderOrder;
+    m.matrixAutoUpdate = false;
+    scene.add(m);
+    for (const o of list) { scene.remove(o); if (!pickOnly.has(o)) o.geometry.dispose(); }
+  }
+})();
+
+// ---------------------------------------------------------------------------
 // Loop
 // ---------------------------------------------------------------------------
 addEventListener('resize', () => {
@@ -3585,6 +3657,9 @@ addEventListener('resize', () => {
 });
 const boardMaps = ledMats.filter(m => m.map.image === boardTex.image).map(m => m.map);
 let last = performance.now();
+const picked = { at: null, cam: new THREE.Matrix4(), p: null };
+const frustum = new THREE.Frustum(), viewProj = new THREE.Matrix4();
+let flagShadowStale = false, matchWasOn = false;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (tween) {
@@ -3607,18 +3682,28 @@ function frame(now) {
   pin.position.y += Math.sin(now / 300) * 0.01;
   pin.rotation.y = now / 900;
   if (lastMove && !tween && (!down || !down.moved)) {
-    const p = pick(lastMove.x, lastMove.y);
+    if (lastMove !== picked.at || !camera.matrixWorld.equals(picked.cam)) { picked.at = lastMove; picked.cam.copy(camera.matrixWorld); picked.p = pick(lastMove.x, lastMove.y); }
+    const p = picked.p;
     setHover(p); showTip(p, lastMove.x, lastMove.y);
   }
-  flags.tick(now);
+  if (flags.tick(now)) flagShadowStale = true;
   match.tick(dt);
+  camera.updateMatrixWorld();
+  frustum.setFromProjectionMatrix(viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  if (flagShadowStale && frustum.intersectsSphere(flags.sphere)) { renderer.shadowMap.needsUpdate = true; flagShadowStale = false; }
+  if (match.on || matchWasOn) renderer.shadowMap.needsUpdate = true;
+  matchWasOn = match.on;
+  // a seat number only shows with its plate 20 px or more across (smaller, the shader discards it): beyond the
+  // distance where that can happen, with some margin, a sector's plates are not drawn at all
+  const plateReach = 1.5 * 0.1 * renderer.domElement.height / (40 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+  for (const sec of sectors) { const b = sec.mesh.boundingSphere; sec.plates.visible = camera.position.distanceTo(b.center) - b.radius < plateReach; }
   badgeAnim.tick(now, dt, mode === 'overview' ? hoveredSector : null);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 $('loading').remove();
-window.__stadium = { STANDS, PITS, scene, match, sectors, totalSeats, capacity, selectSeat, sectorByName, camera, controls, render: () => renderer.render(scene, camera) };
+window.__stadium = { STANDS, PITS, scene, renderer, pick, match, sectors, totalSeats, capacity, selectSeat, sectorByName, camera, controls, render: () => renderer.render(scene, camera) };
 </script>
 
 </html>
